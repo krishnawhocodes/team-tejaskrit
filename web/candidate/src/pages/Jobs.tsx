@@ -100,7 +100,7 @@ export default function Jobs() {
   const { data: recommendationBundle } = useQuery({
     queryKey: ["activeRecommendations", authUser?.uid],
     enabled: !!authUser?.uid,
-    queryFn: () => listActiveRecommendations(authUser!.uid, 40),
+    queryFn: () => listActiveRecommendations(authUser!.uid, 150),
     staleTime: 30_000,
   });
 
@@ -144,9 +144,10 @@ export default function Jobs() {
         const job = r.data;
         const app = appByJobId.get(r.id);
         const rec = recByJobId.get(r.id);
-        const score = rec?.finalScore ?? rec?.score ?? app?.matchScore ?? 0;
+        const score = rec?.finalScore ?? rec?.localScore ?? rec?.score ?? app?.matchScore ?? 0;
         const reasons =
           (rec?.reasons?.length ? rec.reasons : undefined) ??
+          (rec?.localReasons?.length ? rec.localReasons : undefined) ??
           (app?.matchReasons?.length ? app.matchReasons : undefined) ??
           ["Generate AI Tejaskrit recommendation to see saved match insights."];
         const ui = toJobUI(r.id, job, score, reasons, job.visibility === "institute");

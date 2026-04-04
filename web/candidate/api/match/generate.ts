@@ -8,7 +8,7 @@ import { buildCandidateText, computeLocalRecommendation, listVisibleJobsForUser 
 type ResultRow = {
   jobId: string;
   localScore: number;
-  aiScore: number;
+  aiScore?: number;
   finalScore: number;
   localReasons: string[];
   aiReasons: string[];
@@ -93,24 +93,35 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       localReasons: row.localReasons,
     }));
 
-    const out = await groqChatJson({
-      model: "llama-3.1-8b-instant",
-      messages: [
-        {
-          role: "system",
-          content:
-            "You are Tejaskrit AI job matcher. Score fit between a candidate master resume and jobs. Return STRICT JSON only. Scores are relevance percentages from 0 to 100. Keep reasons short, concrete, and resume-grounded. Do not invent experience.",
-        },
-        {
-          role: "user",
-          content: `Candidate:\n${candidateText}\n\nJobs(JSON):\n${JSON.stringify(promptJobs, null, 2)}\n\nReturn JSON exactly like {"results":[{"jobId":"...","score":82,"reasons":["...","...","..."]}]}`,
-        },
-      ],
-      temperature: 0.1,
-      maxTokens: 1300,
-    });
+    let aiRows: any[] = [];
+    try {
+      const out = await groqChatJson({
+        model: "llama-3.1-8b-instant",
+        messages: [
+          {
+            role: "system",
+            content:
+              "You are Tejaskrit AI job matcher. Score fit between a candidate master resume and jobs. Return STRICT JSON only. Scores are relevance percentages from 0 to 100. Keep reasons short, concrete, and resume-grounded. Do not invent experience.",
+          },
+          {
+            role: "user",
+            content: `Candidate:
+${candidateText}
 
-    const aiRows = Array.isArray(out?.results) ? out.results : [];
+Jobs(JSON):
+${JSON.stringify(promptJobs, null, 2)}
+
+Return JSON exactly like {"results":[{"jobId":"...","score":82,"reasons":["...","...","..."]}]}`,
+          },
+        ],
+        temperature: 0.1,
+        maxTokens: 1300,
+      });
+
+      aiRows = Array.isArray(out?.results) ? out.results : [];
+    } catch (groqError) {
+      console.error("AI recommendation overlay failed; saving local recommendations only", groqError);
+    }
     const aiByJobId = new Map<string, { score: number; reasons: string[] }>();
     for (const row of aiRows) {
       if (!row?.jobId) continue;
@@ -121,10 +132,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const completedAt = new Date();
-    const results: ResultRow[] = shortlist.map((row) => {
+    const results: ResultRow[] = localRanked.map((row) => {
       const ai = aiByJobId.get(row.id);
-      const aiScore = clampScore(ai?.score ?? row.localScore);
-      const finalScore = clampScore(row.localScore * 0.45 + aiScore * 0.55);
+      const hasAi = !!ai;
+      const aiScore = hasAi ? clampScore(ai?.score ?? row.localScore) : undefined;
+      const finalScore = hasAi
+        ? clampScore(row.localScore * 0.45 + (aiScore ?? row.localScore) * 0.55)
+        : clampScore(row.localScore);
       return {
         jobId: row.id,
         localScore: row.localScore,
@@ -136,9 +150,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       };
     });
 
+    const jobMap = new Map(visibleJobs.map((row) => [row.id, row.data]));
+
     const batch = db.batch();
     for (const row of results) {
-      const job = visibleJobs.find((x) => x.id === row.jobId)?.data ?? {};
+      const job = jobMap.get(row.jobId) ?? {};
       const recRef = userRef.collection("recommendations").doc(row.jobId);
       batch.set(
         recRef,
@@ -151,7 +167,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           reasons: row.reasons,
           localReasons: row.localReasons,
           aiReasons: row.aiReasons,
-          source: "groq:manual-v2",
+          source: row.aiScore !== undefined ? "groq:manual-v2" : "local:manual-v1",
           model: "llama-3.1-8b-instant",
           generationId,
           computedAt: completedAt,
@@ -179,7 +195,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         updatedAt: completedAt,
         model: "llama-3.1-8b-instant",
         recommendationCount: results.length,
-        shortlistedJobIds: results.map((x) => x.jobId),
+        aiRecommendationCount: results.filter((x) => x.aiScore !== undefined).length,
+        shortlistedJobIds: shortlist.map((x) => x.id),
       }),
       { merge: true }
     );
@@ -190,6 +207,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       ok: true,
       generationId,
       recommendationCount: results.length,
+      aiRecommendationCount: results.filter((row) => row.aiScore !== undefined).length,
       results: results.map((row) => ({
         jobId: row.jobId,
         score: row.finalScore,
