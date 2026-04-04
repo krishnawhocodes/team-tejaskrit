@@ -1,39 +1,5 @@
 import { auth } from "@/lib/firebase";
 
-type RankedJobApiItem = {
-  id: string;
-  title: string;
-  company: string;
-  location?: string;
-  jobType?: "Internship" | "Full-time";
-  applyUrl?: string;
-  description: string;
-  skills: string[];
-  source: string;
-  visibility?: "public" | "institute" | "private";
-  instituteId?: string | null;
-  ownerUid?: string | null;
-  lastSeenAtMs: number;
-  localScore: number;
-  aiScore?: number;
-  finalScore: number;
-  reasons: string[];
-  localReasons: string[];
-  aiReasons?: string[];
-  scoreSource: "local" | "groq" | "hybrid";
-  profileHash: string;
-  jobHash: string;
-  breakdown: {
-    skillOverlap: number;
-    projectOverlap: number;
-    experienceOverlap: number;
-    titleAlignment: number;
-    educationRelevance: number;
-    preferenceFit: number;
-    recencyBoost: number;
-  };
-};
-
 async function getIdToken() {
   const u = auth.currentUser;
   if (!u) throw new Error("Not signed in");
@@ -81,24 +47,35 @@ export async function downloadResumePdf(applicationId: string) {
   URL.revokeObjectURL(url);
 }
 
-export async function getRankedJobsFeed(take = 150) {
-  const res = await authedFetch(`/api/match/feed?take=${encodeURIComponent(String(take))}`);
-  const json = await res.json().catch(() => null);
-  if (!res.ok || !json?.ok) throw new Error(json?.error || `HTTP ${res.status}`);
-  return json as {
-    ok: true;
-    jobs: RankedJobApiItem[];
-    meta: { total: number; hasProfile: boolean; usedRecommendations: boolean };
-  };
-}
+
 
 export async function refreshAiMatchScores(jobIds: string[]) {
-  const res = await authedFetch("/api/match/refresh", {
+  const token = await getIdToken();
+  const res = await fetch("/api/match/refresh", {
     method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
     body: JSON.stringify({ jobIds }),
   });
 
   const json = await res.json().catch(() => null);
   if (!res.ok || !json?.ok) throw new Error(json?.error || `HTTP ${res.status}`);
-  return json as { ok: true; results: Array<{ jobId: string; score: number; reasons: string[]; localScore: number }> };
+  return json as { ok: true; results: Array<{ jobId: string; score: number; reasons: string[] }> };
+}
+
+export async function generateAiTejaskritRecommendations() {
+  const res = await authedFetch("/api/match/generate", {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+  const json = await res.json().catch(() => null);
+  if (!res.ok || !json?.ok) throw new Error(json?.error || `HTTP ${res.status}`);
+  return json as {
+    ok: true;
+    generationId: string;
+    recommendationCount: number;
+    results: Array<{ jobId: string; score: number; reasons: string[] }>;
+  };
 }

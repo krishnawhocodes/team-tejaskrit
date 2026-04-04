@@ -116,9 +116,22 @@ export interface RecommendationDoc {
   aiReasons?: string[];
   source?: string;
   model?: string;
+  generationId?: string;
   profileHash?: string;
   jobHash?: string;
   computedAt?: Timestamp;
+}
+
+export interface RecommendationMetaDoc {
+  status?: "idle" | "generating" | "ready" | "failed";
+  generationId?: string;
+  model?: string;
+  recommendationCount?: number;
+  shortlistedJobIds?: string[];
+  startedAt?: Timestamp;
+  generatedAt?: Timestamp;
+  updatedAt?: Timestamp;
+  error?: string;
 }
 
 export interface ApplicationDoc {

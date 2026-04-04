@@ -31,6 +31,7 @@ import type {
   MasterProfileDoc,
   NotificationDoc,
   RecommendationDoc,
+  RecommendationMetaDoc,
   UserDoc,
 } from "./types";
 // slugify previously used for institute doc IDs; now institutes are owned by TPO.
@@ -310,7 +311,28 @@ export async function listRecommendations(uid: string, take = 50): Promise<Array
   const q = query(collection(db, "users", uid, "recommendations"), limit(take));
   const snap = await getDocs(q);
   const rows = snap.docs.map((d) => ({ id: d.id, data: d.data() as RecommendationDoc }));
-  return rows.sort((a, b) => (b.data.score ?? 0) - (a.data.score ?? 0));
+  return rows.sort((a, b) => ((b.data.finalScore ?? b.data.score) || 0) - ((a.data.finalScore ?? a.data.score) || 0));
+}
+
+export async function getRecommendationMeta(uid: string): Promise<RecommendationMetaDoc | null> {
+  const snap = await getDoc(doc(db, "users", uid, "recommendation_meta", "main"));
+  return snap.exists() ? (snap.data() as RecommendationMetaDoc) : null;
+}
+
+export async function listActiveRecommendations(uid: string, take = 50): Promise<{
+  meta: RecommendationMetaDoc | null;
+  rows: Array<{ id: string; data: RecommendationDoc }>;
+}> {
+  const [meta, rows] = await Promise.all([getRecommendationMeta(uid), listRecommendations(uid, Math.max(take, 50))]);
+  const filtered = meta?.generationId
+    ? rows.filter((row) => (row.data.generationId ?? "") === meta.generationId)
+    : rows;
+  return {
+    meta,
+    rows: filtered
+      .sort((a, b) => ((b.data.finalScore ?? b.data.score) || 0) - ((a.data.finalScore ?? a.data.score) || 0))
+      .slice(0, take),
+  };
 }
 
 // ---------------------------
