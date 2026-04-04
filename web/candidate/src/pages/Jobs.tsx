@@ -18,14 +18,14 @@ import { motion } from "framer-motion";
 import { useAuth } from "@/contexts/AuthProvider";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  getActiveRecommendationBundle,
   jobIdFromAny,
-  listActiveRecommendations,
   listApplications,
   listJobsFeedForUser,
   upsertApplicationForJob,
 } from "@/lib/firestore";
 import { generateTailoredLatex } from "@/lib/api";
-import type { ApplicationDoc, JobDoc, RecommendationDoc } from "@/lib/types";
+import type { ApplicationDoc, JobDoc, RecommendationBundleJob } from "@/lib/types";
 import { sourceLabel, type JobSourceLabel } from "@/lib/mappers";
 import { toast } from "@/hooks/use-toast";
 
@@ -81,6 +81,24 @@ function toJobUI(id: string, j: JobDoc, score: number, reasons: string[], instit
   };
 }
 
+function bundleJobToUI(job: RecommendationBundleJob): JobUI {
+  return {
+    id: job.jobId,
+    title: job.title,
+    company: job.company,
+    location: job.location,
+    type: job.jobType as JobUI["type"],
+    source: sourceLabel((job.source as any) || "manual", job.visibility === "institute"),
+    matchScore: job.matchScore,
+    matchReasons: job.matchReasons?.length ? job.matchReasons : ["Saved AI recommendation"],
+    lastSeen: timeAgo(job.lastSeenAtMs),
+    description: job.description || "",
+    skills: job.skills || [],
+    applyUrl: job.applyUrl,
+    visibility: job.visibility as JobUI["visibility"],
+  };
+}
+
 const CONSENT_KEY = "tejaskrit_resume_consent_hide";
 
 export default function Jobs() {
@@ -97,10 +115,10 @@ export default function Jobs() {
 
   const consentHidden = localStorage.getItem(CONSENT_KEY) === "1";
 
-  const { data: recommendationBundle } = useQuery({
-    queryKey: ["activeRecommendations", authUser?.uid],
+  const { data: activeRecommendationBundle, isLoading: recommendationLoading } = useQuery({
+    queryKey: ["activeRecommendationBundle", authUser?.uid],
     enabled: !!authUser?.uid,
-    queryFn: () => listActiveRecommendations(authUser!.uid, 150),
+    queryFn: () => getActiveRecommendationBundle(authUser!.uid),
     staleTime: 30_000,
   });
 
@@ -118,10 +136,13 @@ export default function Jobs() {
     return m;
   }, [apps]);
 
-  // ✅ jobs feed without composite indexes
-  const { data: feedRows, isLoading } = useQuery({
+  const savedBundleJobs = activeRecommendationBundle?.bundle?.jobs ?? [];
+  const hasSavedBundle = savedBundleJobs.length > 0;
+
+  // ✅ jobs feed without composite indexes (fallback only before the first AI generation)
+  const { data: feedRows, isLoading: fallbackLoading } = useQuery({
     queryKey: ["jobsFeed", authUser?.uid, userDoc?.instituteId],
-    enabled: !!authUser?.uid,
+    enabled: !!authUser?.uid && !recommendationLoading && !hasSavedBundle,
     queryFn: () =>
       listJobsFeedForUser({
         uid: authUser!.uid,
@@ -131,31 +152,35 @@ export default function Jobs() {
     staleTime: 20_000,
   });
 
-  const recByJobId = useMemo(() => {
-    const m = new Map<string, RecommendationDoc>();
-    (recommendationBundle?.rows ?? []).forEach((row) => m.set(jobIdFromAny(row.data.jobId ?? row.id), row.data));
-    return m;
-  }, [recommendationBundle]);
-
   const allJobs = useMemo(() => {
+    if (hasSavedBundle) {
+      return savedBundleJobs.map((saved) => {
+        const ui = bundleJobToUI(saved);
+        const app = appByJobId.get(saved.jobId);
+        ui.appStatus = app?.status;
+        return ui;
+      });
+    }
+
     const rows = feedRows ?? [];
     return rows
       .map((r) => {
         const job = r.data;
         const app = appByJobId.get(r.id);
-        const rec = recByJobId.get(r.id);
-        const score = rec?.finalScore ?? rec?.localScore ?? rec?.score ?? app?.matchScore ?? 0;
-        const reasons =
-          (rec?.reasons?.length ? rec.reasons : undefined) ??
-          (rec?.localReasons?.length ? rec.localReasons : undefined) ??
-          (app?.matchReasons?.length ? app.matchReasons : undefined) ??
-          ["Generate AI Tejaskrit recommendation to see saved match insights."];
-        const ui = toJobUI(r.id, job, score, reasons, job.visibility === "institute");
+        const ui = toJobUI(
+          r.id,
+          job,
+          app?.matchScore ?? 0,
+          app?.matchReasons?.length ? app.matchReasons : ["Generate AI Tejaskrit recommendation to save a stable ranked list."],
+          job.visibility === "institute"
+        );
         ui.appStatus = app?.status;
         return ui;
       })
       .sort((a, b) => b.matchScore - a.matchScore || a.lastSeen.localeCompare(b.lastSeen));
-  }, [feedRows, appByJobId, recByJobId]);
+  }, [feedRows, appByJobId, hasSavedBundle, savedBundleJobs]);
+
+  const isLoading = recommendationLoading || (!hasSavedBundle && fallbackLoading);
 
   const instituteJobs = useMemo(
     () => (allJobs ?? []).filter((j) => j.visibility === "institute"),
@@ -264,8 +289,8 @@ export default function Jobs() {
             <p className="text-sm text-muted-foreground">Openings saved for your profile. AI-ranked results keep loading from Firebase until you regenerate them.</p>
           </div>
           <AiRecommendationButton
-            hasRecommendations={(recommendationBundle?.rows?.length ?? 0) > 0}
-            generatedAtLabel={recommendationBundle?.meta?.generatedAt ? timeAgo((recommendationBundle.meta.generatedAt as any)?.toMillis?.()) : undefined}
+            hasRecommendations={hasSavedBundle}
+            generatedAtLabel={activeRecommendationBundle?.meta?.generatedAt ? timeAgo((activeRecommendationBundle.meta.generatedAt as any)?.toMillis?.()) : undefined}
           />
         </div>
 
@@ -505,7 +530,7 @@ function JobList({
   onApply: (j: JobUI) => Promise<void>;
 }) {
   if (loading) {
-    return <Card className="card-elevated p-6 text-sm text-muted-foreground">Loading jobs…</Card>;
+    return <Card className="card-elevated p-6 text-sm text-muted-foreground">Loading your saved jobs…</Card>;
   }
 
   if (list.length === 0) {

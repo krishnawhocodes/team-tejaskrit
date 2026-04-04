@@ -122,16 +122,54 @@ export interface RecommendationDoc {
   computedAt?: Timestamp;
 }
 
+export interface RecommendationBundleJob {
+  jobId: string;
+  title: string;
+  company: string;
+  location?: string;
+  jobType?: "Internship" | "Full-time" | string;
+  applyUrl?: string;
+  source?: JobSourceKey | string;
+  visibility?: JobVisibility | string;
+  lastSeenAtMs: number;
+  description: string;
+  skills: string[];
+  matchScore: number;
+  matchReasons: string[];
+  localScore: number;
+  aiScore?: number;
+}
+
+export interface RecommendationGenerationDoc {
+  generationId: string;
+  status?: "generating" | "ready" | "failed";
+  model?: string;
+  recommendationCount?: number;
+  aiRecommendationCount?: number;
+  jobs?: RecommendationBundleJob[];
+  topJobsPreview?: RecommendationBundleJob[];
+  startedAt?: Timestamp;
+  generatedAt?: Timestamp;
+  updatedAt?: Timestamp;
+}
+
 export interface RecommendationMetaDoc {
   status?: "idle" | "generating" | "ready" | "failed";
   generationId?: string;
+  activeGenerationId?: string;
   model?: string;
   recommendationCount?: number;
+  aiRecommendationCount?: number;
   shortlistedJobIds?: string[];
   startedAt?: Timestamp;
   generatedAt?: Timestamp;
   updatedAt?: Timestamp;
-  error?: string;
+  error?: string | null;
+  stage?: "idle" | "loading_jobs" | "local_scoring" | "ai_scoring" | "saving" | "ready" | "failed";
+  progressPercent?: number;
+  visibleJobCount?: number;
+  chunksDone?: number;
+  totalChunks?: number;
 }
 
 export interface ApplicationDoc {

@@ -1,6 +1,26 @@
 import type { Firestore } from "firebase-admin/firestore";
 
-function clip(s: string, n: number) {
+export type RecommendationBundleJobSnapshot = {
+  jobId: string;
+  title: string;
+  company: string;
+  location?: string;
+  jobType?: string;
+  applyUrl?: string;
+  source?: string;
+  visibility?: string;
+  lastSeenAtMs: number;
+  description: string;
+  skills: string[];
+  matchScore: number;
+  matchReasons: string[];
+  localScore: number;
+  aiScore?: number;
+};
+
+export type VisibleJobRow = { id: string; data: any };
+
+export function clip(s: string, n: number) {
   const t = (s ?? "").trim();
   return t.length > n ? t.slice(0, n) + "…" : t;
 }
@@ -33,15 +53,22 @@ function textContainsAny(text: string, needles: string[]) {
   return needles.some((n) => n && hay.includes(n.toLowerCase()));
 }
 
-function tsMillis(x: any): number {
+export function tsMillis(x: any): number {
   if (!x) return 0;
   if (typeof x?.toMillis === "function") return x.toMillis();
   if (x instanceof Date) return x.getTime();
   return 0;
 }
 
-function jobSortKey(j: any): number {
+export function jobSortKey(j: any): number {
   return tsMillis(j.lastSeenAt) || tsMillis(j.postedAt) || tsMillis(j.createdAt) || tsMillis(j.updatedAt) || 0;
+}
+
+export function chunkArray<T>(items: T[], size: number): T[][] {
+  if (size <= 0) return [items];
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
 }
 
 export function buildCandidateText(user: any, profile: any) {
@@ -160,16 +187,45 @@ export function computeLocalRecommendation(job: any, user: any, profile: any) {
   return { score: Math.max(0, Math.min(100, score)), reasons };
 }
 
+export function buildBundleJobSnapshot(args: {
+  jobId: string;
+  job: any;
+  finalScore: number;
+  localScore: number;
+  aiScore?: number;
+  reasons: string[];
+}) : RecommendationBundleJobSnapshot {
+  const { jobId, job, finalScore, localScore, aiScore, reasons } = args;
+  return {
+    jobId,
+    title: String(job?.title ?? ""),
+    company: String(job?.company ?? ""),
+    location: job?.location ? String(job.location) : undefined,
+    jobType: job?.jobType ? String(job.jobType) : undefined,
+    applyUrl: job?.applyUrl ? String(job.applyUrl) : undefined,
+    source: job?.source ? String(job.source) : undefined,
+    visibility: job?.visibility ? String(job.visibility) : undefined,
+    lastSeenAtMs: jobSortKey(job),
+    description: clip(String(job?.jdText ?? ""), 900),
+    skills: Array.isArray(job?.tags) ? job.tags.map(String).slice(0, 12) : [],
+    matchScore: Math.max(0, Math.min(100, Math.round(finalScore))),
+    matchReasons: Array.isArray(reasons) ? reasons.map((x) => clip(String(x), 120)).slice(0, 4) : [],
+    localScore: Math.max(0, Math.min(100, Math.round(localScore))),
+    aiScore: aiScore === undefined ? undefined : Math.max(0, Math.min(100, Math.round(aiScore))),
+  };
+}
+
 export async function listVisibleJobsForUser(db: Firestore, args: { uid: string; instituteId?: string | null; take?: number }) {
-  const { uid, instituteId, take = 120 } = args;
+  const { uid, instituteId, take = 150 } = args;
   const jobsCol = db.collection("jobs");
+  const queryTake = Math.min(Math.max(take, 1), 150);
   const [pub, inst, priv] = await Promise.all([
-    jobsCol.where("visibility", "==", "public").limit(Math.min(take, 100)).get(),
-    instituteId ? jobsCol.where("instituteId", "==", instituteId).limit(Math.min(take, 100)).get() : Promise.resolve(null),
-    jobsCol.where("ownerUid", "==", uid).limit(Math.min(take, 100)).get(),
+    jobsCol.where("visibility", "==", "public").limit(queryTake).get(),
+    instituteId ? jobsCol.where("instituteId", "==", instituteId).limit(queryTake).get() : Promise.resolve(null),
+    jobsCol.where("ownerUid", "==", uid).limit(queryTake).get(),
   ]);
 
-  const map = new Map<string, any>();
+  const map = new Map<string, VisibleJobRow>();
   for (const doc of pub.docs) map.set(doc.id, { id: doc.id, data: doc.data() });
   for (const doc of inst?.docs ?? []) {
     const data = doc.data();

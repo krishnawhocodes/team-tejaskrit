@@ -31,6 +31,7 @@ import type {
   MasterProfileDoc,
   NotificationDoc,
   RecommendationDoc,
+  RecommendationGenerationDoc,
   RecommendationMetaDoc,
   UserDoc,
 } from "./types";
@@ -319,13 +320,31 @@ export async function getRecommendationMeta(uid: string): Promise<Recommendation
   return snap.exists() ? (snap.data() as RecommendationMetaDoc) : null;
 }
 
+export async function getRecommendationGeneration(uid: string, generationId: string): Promise<RecommendationGenerationDoc | null> {
+  if (!generationId) return null;
+  const snap = await getDoc(doc(db, "users", uid, "recommendation_generations", generationId));
+  return snap.exists() ? (snap.data() as RecommendationGenerationDoc) : null;
+}
+
+export async function getActiveRecommendationBundle(uid: string): Promise<{
+  meta: RecommendationMetaDoc | null;
+  bundle: RecommendationGenerationDoc | null;
+}> {
+  const meta = await getRecommendationMeta(uid);
+  const activeGenerationId = meta?.activeGenerationId ?? meta?.generationId;
+  if (!activeGenerationId) return { meta, bundle: null };
+  const bundle = await getRecommendationGeneration(uid, activeGenerationId);
+  return { meta, bundle };
+}
+
 export async function listActiveRecommendations(uid: string, take = 50): Promise<{
   meta: RecommendationMetaDoc | null;
   rows: Array<{ id: string; data: RecommendationDoc }>;
 }> {
   const [meta, rows] = await Promise.all([getRecommendationMeta(uid), listRecommendations(uid, Math.max(take, 50))]);
-  const filtered = meta?.generationId
-    ? rows.filter((row) => (row.data.generationId ?? "") === meta.generationId)
+  const activeGenerationId = meta?.activeGenerationId ?? meta?.generationId;
+  const filtered = activeGenerationId
+    ? rows.filter((row) => (row.data.generationId ?? "") === activeGenerationId)
     : rows;
   return {
     meta,
