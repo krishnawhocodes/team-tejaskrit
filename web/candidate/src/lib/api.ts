@@ -96,3 +96,11 @@ export async function refreshAiMatchScores(jobIds: string[]) {
   if (!res.ok || !json?.ok) throw new Error(json?.error || `HTTP ${res.status}`);
   return json as { ok: true; results: Array<{ jobId: string; score: number; reasons: string[] }> };
 }
+
+
+export async function generateAiTejaskritRecommendations() {
+  const res = await authedFetch("/api/match/generate", {
+    method: "POST",
+  });
+  return parseAuthedJson<{ ok: true; generationId: string; recommendationCount: number; aiRecommendationCount?: number; results: Array<{ jobId: string; score: number; reasons: string[] }> }>(res);
+}
