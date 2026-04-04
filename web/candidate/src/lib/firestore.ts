@@ -31,7 +31,6 @@ import type {
   MasterProfileDoc,
   NotificationDoc,
   RecommendationDoc,
-  RecommendationMetaDoc,
   UserDoc,
 } from "./types";
 // slugify previously used for institute doc IDs; now institutes are owned by TPO.
@@ -319,13 +318,31 @@ export async function getRecommendationMeta(uid: string): Promise<Recommendation
   return snap.exists() ? (snap.data() as RecommendationMetaDoc) : null;
 }
 
+export async function getRecommendationGeneration(uid: string, generationId: string): Promise<RecommendationGenerationDoc | null> {
+  if (!generationId) return null;
+  const snap = await getDoc(doc(db, "users", uid, "recommendation_generations", generationId));
+  return snap.exists() ? (snap.data() as RecommendationGenerationDoc) : null;
+}
+
+export async function getActiveRecommendationBundle(uid: string): Promise<{
+  meta: RecommendationMetaDoc | null;
+  bundle: RecommendationGenerationDoc | null;
+}> {
+  const meta = await getRecommendationMeta(uid);
+  const activeGenerationId = meta?.activeGenerationId ?? meta?.generationId;
+  if (!activeGenerationId) return { meta, bundle: null };
+  const bundle = await getRecommendationGeneration(uid, activeGenerationId);
+  return { meta, bundle };
+}
+
 export async function listActiveRecommendations(uid: string, take = 50): Promise<{
   meta: RecommendationMetaDoc | null;
   rows: Array<{ id: string; data: RecommendationDoc }>;
 }> {
   const [meta, rows] = await Promise.all([getRecommendationMeta(uid), listRecommendations(uid, Math.max(take, 50))]);
-  const filtered = meta?.generationId
-    ? rows.filter((row) => (row.data.generationId ?? "") === meta.generationId)
+  const activeGenerationId = meta?.activeGenerationId ?? meta?.generationId;
+  const filtered = activeGenerationId
+    ? rows.filter((row) => (row.data.generationId ?? "") === activeGenerationId)
     : rows;
   return {
     meta,
@@ -401,6 +418,17 @@ export async function listApplications(uid: string): Promise<Array<{ id: string;
   const snap = await getDocs(q);
   const rows = snap.docs.map((d) => ({ id: d.id, data: d.data() as ApplicationDoc }));
   return rows.sort((a, b) => tsMillis((b.data as any).updatedAt) - tsMillis((a.data as any).updatedAt));
+}
+
+export async function getApplicationById(applicationId: string): Promise<{ id: string; data: ApplicationDoc } | null> {
+  const snap = await getDoc(doc(db, "applications", applicationId));
+  if (!snap.exists()) return null;
+  return { id: snap.id, data: snap.data() as ApplicationDoc };
+}
+
+export async function getJobById(jobId: string): Promise<JobDoc | null> {
+  const snap = await getDoc(doc(db, "jobs", jobIdFromAny(jobId)));
+  return snap.exists() ? (snap.data() as JobDoc) : null;
 }
 
 export async function upsertApplicationForJob(args: {

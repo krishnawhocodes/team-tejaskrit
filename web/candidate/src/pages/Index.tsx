@@ -18,22 +18,22 @@ import {
   Video,
   Calendar,
 } from "lucide-react";
+import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useAuth } from "@/contexts/AuthProvider";
 import { useQuery } from "@tanstack/react-query";
 import {
-  getJobsByIds,
+  getActiveRecommendationBundle,
   jobIdFromAny,
-  listActiveRecommendations,
   listApplications,
   listInstituteJobs,
   listJobsFeedForUser,
   listUpcomingEvents,
 } from "@/lib/firestore";
 import { generateTailoredLatex } from "@/lib/api";
-import type { JobDoc, RecommendationDoc } from "@/lib/types";
-import { sourceLabel } from "@/lib/mappers";
+import type { JobDoc, RecommendationBundleJob } from "@/lib/types";
+import { normalizeJobSourceKey, sourceLabel } from "@/lib/mappers";
 import { toast } from "@/hooks/use-toast";
 
 const activityIcons: Record<string, React.ReactNode> = {
@@ -73,43 +73,42 @@ function timeAgo(dateMs?: number) {
   return `${days} days ago`;
 }
 
+function bundleJobToUI(job: RecommendationBundleJob): JobUI {
+  return {
+    id: job.jobId,
+    title: job.title,
+    company: job.company,
+    location: job.location,
+    jobType: job.jobType as JobUI["jobType"],
+    applyUrl: job.applyUrl,
+    matchScore: job.matchScore,
+    matchReasons: job.matchReasons?.length ? job.matchReasons : ["Saved AI recommendation"],
+    source: sourceLabel(normalizeJobSourceKey(job as any), job.visibility === "institute"),
+    lastSeen: timeAgo(job.lastSeenAtMs),
+  };
+}
+
 export default function Dashboard() {
   const { authUser, userDoc } = useAuth();
 
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
 
-  const { data: recommendationBundle } = useQuery({
-    queryKey: ["activeRecommendations", authUser?.uid],
+  const { data: activeRecommendationBundle, isLoading: recommendationLoading } = useQuery({
+    queryKey: ["activeRecommendationBundle", authUser?.uid],
     enabled: !!authUser?.uid,
-    queryFn: () => listActiveRecommendations(authUser!.uid, 12),
+    queryFn: () => getActiveRecommendationBundle(authUser!.uid),
     staleTime: 30_000,
   });
 
-  const { data: recJobs, isLoading: recLoading } = useQuery({
-    queryKey: ["recommendedJobs", authUser?.uid, recommendationBundle?.meta?.generationId],
-    enabled: !!authUser?.uid,
-    queryFn: async () => {
-      if (!authUser?.uid) return [] as JobUI[];
-      const recs = recommendationBundle?.rows ?? [];
-      if (recs.length === 0) return [] as JobUI[];
-      const ids = recs.map((r) => jobIdFromAny(r.data.jobId ?? r.id));
-      const map = await getJobsByIds(ids);
-      return recs
-        .map((r) => {
-          const id = jobIdFromAny(r.data.jobId ?? r.id);
-          const j = map[id];
-          if (!j) return null;
-          return toJobUI(id, j, r.data.finalScore ?? r.data.score, r.data.reasons ?? []);
-        })
-        .filter(Boolean) as JobUI[];
-    },
-    staleTime: 30_000,
-  });
+  const savedBundleJobs = activeRecommendationBundle?.bundle?.jobs ?? [];
+  const hasSavedBundle = savedBundleJobs.length > 0;
+
+  const recJobs = useMemo(() => savedBundleJobs.slice(0, 6).map((job) => bundleJobToUI(job)), [savedBundleJobs]);
 
   const { data: fallbackJobs, isLoading: fallbackLoading } = useQuery({
     queryKey: ["homeFallbackJobs", authUser?.uid, userDoc?.instituteId],
-    enabled: !!authUser?.uid,
+    enabled: !!authUser?.uid && !recommendationLoading && !hasSavedBundle,
     queryFn: async () => {
       if (!authUser?.uid) return [] as JobUI[];
       const rows = await listJobsFeedForUser({
@@ -122,17 +121,12 @@ export default function Dashboard() {
     staleTime: 20_000,
   });
 
-  const { data: instituteJobs } = useQuery({
-    queryKey: ["instituteJobs", userDoc?.instituteId, recommendationBundle?.meta?.generationId],
-    enabled: !!userDoc?.instituteId,
+  const { data: instituteJobsFallback } = useQuery({
+    queryKey: ["instituteJobs", userDoc?.instituteId],
+    enabled: !!userDoc?.instituteId && !hasSavedBundle,
     queryFn: async () => {
       const jobs = await listInstituteJobs(userDoc!.instituteId!, 6);
-      const recByJobId = new Map<string, RecommendationDoc>();
-      (recommendationBundle?.rows ?? []).forEach((row) => recByJobId.set(jobIdFromAny(row.data.jobId ?? row.id), row.data));
-      return jobs.map((j) => {
-        const rec = recByJobId.get(j.id);
-        return toJobUI(j.id, j.data, rec?.finalScore ?? rec?.score ?? 0, rec?.reasons ?? ["AI recommendation will appear here after generation."], true);
-      });
+      return jobs.map((j) => toJobUI(j.id, j.data, 0, ["AI recommendation will appear here after generation."], true));
     },
     staleTime: 30_000,
   });
@@ -151,8 +145,13 @@ export default function Dashboard() {
     staleTime: 15_000,
   });
 
-  const prioritySource = (recJobs ?? []).length > 0 ? (recJobs ?? []) : (fallbackJobs ?? []);
+  const prioritySource = hasSavedBundle ? recJobs : (fallbackJobs ?? []);
   const priorityJobs = prioritySource.slice(0, 6);
+
+  const instituteJobs = useMemo(
+    () => (hasSavedBundle ? savedBundleJobs.filter((job) => job.visibility === "institute").slice(0, 6).map((job) => bundleJobToUI(job)) : instituteJobsFallback ?? []),
+    [hasSavedBundle, savedBundleJobs, instituteJobsFallback]
+  );
 
   const kpis = computeKPIs(prioritySource, apps ?? [], upcoming ?? []);
 
@@ -187,8 +186,8 @@ export default function Dashboard() {
         </motion.div>
 
         <AiRecommendationButton
-          hasRecommendations={(recommendationBundle?.rows?.length ?? 0) > 0}
-          generatedAtLabel={recommendationBundle?.meta?.generatedAt ? timeAgo((recommendationBundle.meta.generatedAt as any)?.toMillis?.()) : undefined}
+          hasRecommendations={hasSavedBundle}
+          generatedAtLabel={activeRecommendationBundle?.meta?.generatedAt ? timeAgo((activeRecommendationBundle.meta.generatedAt as any)?.toMillis?.()) : undefined}
         />
 
         {/* KPI Cards */}
@@ -221,7 +220,7 @@ export default function Dashboard() {
             </Link>
           </div>
 
-          {recLoading || fallbackLoading ? (
+          {recommendationLoading || (!hasSavedBundle && fallbackLoading) ? (
             <Card className="card-elevated p-6 text-sm text-muted-foreground">Loading priority jobs…</Card>
           ) : priorityJobs.length === 0 ? (
             <Card className="card-elevated p-6 text-sm text-muted-foreground">
@@ -380,7 +379,7 @@ function toJobUI(id: string, j: JobDoc, score: number, reasons: string[], instit
     applyUrl: j.applyUrl,
     matchScore: score,
     matchReasons: reasons,
-    source: sourceLabel(j.source, instituteVerified || j.visibility === "institute"),
+    source: sourceLabel(normalizeJobSourceKey(j as any), instituteVerified || j.visibility === "institute"),
     lastSeen: timeAgo(lastSeenMs),
   };
 }

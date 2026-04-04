@@ -16,6 +16,12 @@ export async function authedFetch(input: RequestInfo | URL, init: RequestInit = 
   return fetch(input, { ...init, headers });
 }
 
+async function parseAuthedJson<T>(res: Response): Promise<T> {
+  const json = await res.json().catch(() => null);
+  if (!res.ok || !json?.ok) throw new Error(json?.error || `HTTP ${res.status}`);
+  return json as T;
+}
+
 export async function generateTailoredLatex(args: {
   jobId: string;
   matchScore?: number;
@@ -25,9 +31,37 @@ export async function generateTailoredLatex(args: {
     method: "POST",
     body: JSON.stringify(args),
   });
-  const json = await res.json().catch(() => null);
-  if (!res.ok || !json?.ok) throw new Error(json?.error || `HTTP ${res.status}`);
-  return json as { ok: true; applicationId: string; genId: string };
+  return parseAuthedJson<{ ok: true; applicationId: string; genId: string }>(res);
+}
+
+export async function saveTailoredLatex(args: { applicationId: string; latex: string }) {
+  const res = await authedFetch("/api/resume/save-latex", {
+    method: "POST",
+    body: JSON.stringify(args),
+  });
+  return parseAuthedJson<{ ok: true; applicationId: string; updatedAt: string }>(res);
+}
+
+export async function aiAssistTailoredLatex(args: { applicationId: string; prompt: string; latex: string }) {
+  const res = await authedFetch("/api/resume/ai-assist", {
+    method: "POST",
+    body: JSON.stringify(args),
+  });
+  return parseAuthedJson<{ ok: true; latex: string; model: string }>(res);
+}
+
+export async function getLatexPreviewPdf(latex: string) {
+  const res = await authedFetch("/api/resume/preview-pdf", {
+    method: "POST",
+    body: JSON.stringify({ latex }),
+  });
+
+  if (!res.ok) {
+    const maybeJson = await res.json().catch(() => null);
+    throw new Error(maybeJson?.error || `HTTP ${res.status}`);
+  }
+
+  return res.blob();
 }
 
 export async function downloadResumePdf(applicationId: string) {
@@ -47,8 +81,6 @@ export async function downloadResumePdf(applicationId: string) {
   URL.revokeObjectURL(url);
 }
 
-
-
 export async function refreshAiMatchScores(jobIds: string[]) {
   const token = await getIdToken();
   const res = await fetch("/api/match/refresh", {
@@ -65,17 +97,10 @@ export async function refreshAiMatchScores(jobIds: string[]) {
   return json as { ok: true; results: Array<{ jobId: string; score: number; reasons: string[] }> };
 }
 
+
 export async function generateAiTejaskritRecommendations() {
   const res = await authedFetch("/api/match/generate", {
     method: "POST",
-    body: JSON.stringify({}),
   });
-  const json = await res.json().catch(() => null);
-  if (!res.ok || !json?.ok) throw new Error(json?.error || `HTTP ${res.status}`);
-  return json as {
-    ok: true;
-    generationId: string;
-    recommendationCount: number;
-    results: Array<{ jobId: string; score: number; reasons: string[] }>;
-  };
+  return parseAuthedJson<{ ok: true; generationId: string; recommendationCount: number; aiRecommendationCount?: number; results: Array<{ jobId: string; score: number; reasons: string[] }> }>(res);
 }

@@ -3,7 +3,14 @@ import { getAdminDb } from "../_lib/firebaseAdmin.js";
 import { requireUser } from "../_lib/auth.js";
 import { groqChatJson } from "../_lib/groq.js";
 import { stripUndefinedDeep } from "../_lib/util.js";
-import { buildCandidateText, computeLocalRecommendation, listVisibleJobsForUser } from "../_lib/recommendation.js";
+import {
+  buildBundleJobSnapshot,
+  buildCandidateText,
+  chunkArray,
+  computeLocalRecommendation,
+  jobSortKey,
+  listVisibleJobsForUser,
+} from "../_lib/recommendation.js";
 
 type ResultRow = {
   jobId: string;
@@ -13,7 +20,12 @@ type ResultRow = {
   localReasons: string[];
   aiReasons: string[];
   reasons: string[];
+  job: any;
 };
+
+const MODEL = process.env.GROQ_RECOMMENDATION_MODEL || "llama-3.1-8b-instant";
+const AI_CHUNK_SIZE = Math.max(5, Math.min(Number(process.env.GROQ_RECOMMENDATION_CHUNK_SIZE || 20), 25));
+const MAX_VISIBLE_JOBS = Math.max(20, Math.min(Number(process.env.GROQ_RECOMMENDATION_MAX_JOBS || 150), 150));
 
 function bad(res: VercelResponse, status: number, msg: string) {
   return res.status(status).json({ ok: false, error: msg });
@@ -32,11 +44,18 @@ function hashish(input: string) {
   return `h${(h >>> 0).toString(16)}`;
 }
 
+async function updateMeta(metaRef: any, patch: Record<string, unknown>) {
+  await metaRef.set(stripUndefinedDeep({ ...patch, updatedAt: new Date() }), { merge: true });
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") return bad(res, 405, "Method not allowed");
 
+  let authed: Awaited<ReturnType<typeof requireUser>> | null = null;
+  let previousActiveGenerationId: string | undefined;
+
   try {
-    const authed = await requireUser(req);
+    authed = await requireUser(req);
     const db = getAdminDb();
 
     const userRef = db.collection("users").doc(authed.uid);
@@ -51,110 +70,185 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const profile = profileSnap.data() || {};
 
     const metaRef = userRef.collection("recommendation_meta").doc("main");
+    const existingMetaSnap = await metaRef.get();
+    const existingMeta = existingMetaSnap.exists ? existingMetaSnap.data() || {} : {};
+    previousActiveGenerationId = typeof existingMeta?.activeGenerationId === "string"
+      ? existingMeta.activeGenerationId
+      : typeof existingMeta?.generationId === "string"
+      ? existingMeta.generationId
+      : undefined;
+
     const startedAt = new Date();
     const generationId = `${startedAt.getTime()}`;
+    const generationRef = userRef.collection("recommendation_generations").doc(generationId);
 
-    await metaRef.set(
-      stripUndefinedDeep({
-        status: "generating",
-        generationId,
-        startedAt,
-        updatedAt: startedAt,
-        model: "llama-3.1-8b-instant",
-      }),
-      { merge: true }
-    );
+    await updateMeta(metaRef, {
+      status: "generating",
+      stage: "loading_jobs",
+      progressPercent: 6,
+      generationId,
+      activeGenerationId: previousActiveGenerationId ?? null,
+      startedAt,
+      model: MODEL,
+      error: null,
+      chunksDone: 0,
+      totalChunks: 0,
+    });
 
     const visibleJobs = await listVisibleJobsForUser(db, {
       uid: authed.uid,
       instituteId: user?.instituteId ?? null,
-      take: 150,
+      take: MAX_VISIBLE_JOBS,
     });
-    if (!visibleJobs.length) return bad(res, 404, "No visible jobs found");
+    if (!visibleJobs.length) {
+      await updateMeta(metaRef, {
+        status: previousActiveGenerationId ? "ready" : "idle",
+        stage: previousActiveGenerationId ? "ready" : "idle",
+        progressPercent: previousActiveGenerationId ? 100 : 0,
+        error: "No visible jobs found",
+      });
+      return bad(res, 404, "No visible jobs found");
+    }
+
+    await generationRef.set(
+      stripUndefinedDeep({
+        generationId,
+        status: "generating",
+        startedAt,
+        updatedAt: startedAt,
+        model: MODEL,
+        recommendationCount: visibleJobs.length,
+        jobs: [],
+      }),
+      { merge: true }
+    );
+
+    await updateMeta(metaRef, {
+      stage: "local_scoring",
+      progressPercent: 16,
+      visibleJobCount: visibleJobs.length,
+    });
 
     const localRanked = visibleJobs
       .map((row) => {
         const local = computeLocalRecommendation(row.data, user, profile);
         return { ...row, localScore: local.score, localReasons: local.reasons };
       })
-      .sort((a, b) => b.localScore - a.localScore);
+      .sort((a, b) => b.localScore - a.localScore || jobSortKey(b.data) - jobSortKey(a.data));
 
-    const shortlist = localRanked.slice(0, 8);
     const candidateText = buildCandidateText(user, profile);
-    const promptJobs = shortlist.map((row) => ({
-      jobId: row.id,
-      title: row.data.title ?? "",
-      company: row.data.company ?? "",
-      location: row.data.location ?? "",
-      jobType: row.data.jobType ?? "",
-      tags: Array.isArray(row.data.tags) ? row.data.tags.slice(0, 15) : [],
-      jdText: String(row.data.jdText ?? "").slice(0, 1800),
-      localScore: row.localScore,
-      localReasons: row.localReasons,
-    }));
+    const profileHash = hashish(candidateText);
+    const jobChunks = chunkArray(localRanked, AI_CHUNK_SIZE);
 
-    let aiRows: any[] = [];
-    try {
-      const out = await groqChatJson({
-        model: "llama-3.1-8b-instant",
-        messages: [
-          {
-            role: "system",
-            content:
-              "You are Tejaskrit AI job matcher. Score fit between a candidate master resume and jobs. Return STRICT JSON only. Scores are relevance percentages from 0 to 100. Keep reasons short, concrete, and resume-grounded. Do not invent experience.",
-          },
-          {
-            role: "user",
-            content: `Candidate:
+    await updateMeta(metaRef, {
+      stage: "ai_scoring",
+      progressPercent: jobChunks.length ? 24 : 80,
+      chunksDone: 0,
+      totalChunks: jobChunks.length,
+    });
+
+    const aiByJobId = new Map<string, { score: number; reasons: string[] }>();
+
+    for (let index = 0; index < jobChunks.length; index += 1) {
+      const chunk = jobChunks[index]!;
+      const promptJobs = chunk.map((row) => ({
+        jobId: row.id,
+        title: row.data.title ?? "",
+        company: row.data.company ?? "",
+        location: row.data.location ?? "",
+        jobType: row.data.jobType ?? "",
+        tags: Array.isArray(row.data.tags) ? row.data.tags.slice(0, 15) : [],
+        jdText: String(row.data.jdText ?? "").slice(0, 900),
+        localScore: row.localScore,
+        localReasons: row.localReasons,
+      }));
+
+      try {
+        const out = await groqChatJson({
+          model: MODEL,
+          messages: [
+            {
+              role: "system",
+              content:
+                "You are Tejaskrit AI job matcher. Score fit between a candidate master resume and jobs. Return STRICT JSON only. Scores are relevance percentages from 0 to 100. Keep reasons short, concrete, and resume-grounded. Do not invent experience.",
+            },
+            {
+              role: "user",
+              content: `Candidate:
 ${candidateText}
 
 Jobs(JSON):
 ${JSON.stringify(promptJobs, null, 2)}
 
 Return JSON exactly like {"results":[{"jobId":"...","score":82,"reasons":["...","...","..."]}]}`,
-          },
-        ],
-        temperature: 0.1,
-        maxTokens: 1300,
-      });
+            },
+          ],
+          temperature: 0.1,
+          maxTokens: 1800,
+        });
 
-      aiRows = Array.isArray(out?.results) ? out.results : [];
-    } catch (groqError) {
-      console.error("AI recommendation overlay failed; saving local recommendations only", groqError);
-    }
-    const aiByJobId = new Map<string, { score: number; reasons: string[] }>();
-    for (const row of aiRows) {
-      if (!row?.jobId) continue;
-      aiByJobId.set(String(row.jobId), {
-        score: clampScore(row.score),
-        reasons: Array.isArray(row.reasons) ? row.reasons.map(String).slice(0, 4) : [],
+        const aiRows = Array.isArray(out?.results) ? out.results : [];
+        for (const row of aiRows) {
+          if (!row?.jobId) continue;
+          aiByJobId.set(String(row.jobId), {
+            score: clampScore(row.score),
+            reasons: Array.isArray(row.reasons) ? row.reasons.map((x: unknown) => String(x)).slice(0, 4) : [],
+          });
+        }
+      } catch (groqError) {
+        console.error(`AI recommendation chunk ${index + 1}/${jobChunks.length} failed; using local scores for this chunk`, groqError);
+      }
+
+      await updateMeta(metaRef, {
+        stage: "ai_scoring",
+        progressPercent: clampScore(24 + ((index + 1) / Math.max(jobChunks.length, 1)) * 60),
+        chunksDone: index + 1,
+        totalChunks: jobChunks.length,
       });
     }
 
     const completedAt = new Date();
-    const results: ResultRow[] = localRanked.map((row) => {
-      const ai = aiByJobId.get(row.id);
-      const hasAi = !!ai;
-      const aiScore = hasAi ? clampScore(ai?.score ?? row.localScore) : undefined;
-      const finalScore = hasAi
-        ? clampScore(row.localScore * 0.45 + (aiScore ?? row.localScore) * 0.55)
-        : clampScore(row.localScore);
-      return {
-        jobId: row.id,
-        localScore: row.localScore,
-        aiScore,
-        finalScore,
-        localReasons: row.localReasons,
-        aiReasons: ai?.reasons ?? [],
-        reasons: Array.from(new Set([...(ai?.reasons ?? []), ...row.localReasons])).slice(0, 5),
-      };
-    });
+    const results: ResultRow[] = localRanked
+      .map((row) => {
+        const ai = aiByJobId.get(row.id);
+        const hasAi = !!ai;
+        const aiScore = hasAi ? clampScore(ai?.score ?? row.localScore) : undefined;
+        const finalScore = hasAi
+          ? clampScore(row.localScore * 0.4 + (aiScore ?? row.localScore) * 0.6)
+          : clampScore(row.localScore);
+        return {
+          jobId: row.id,
+          localScore: row.localScore,
+          aiScore,
+          finalScore,
+          localReasons: row.localReasons,
+          aiReasons: ai?.reasons ?? [],
+          reasons: Array.from(new Set([...(ai?.reasons ?? []), ...row.localReasons])).slice(0, 5),
+          job: row.data,
+        };
+      })
+      .sort((a, b) => b.finalScore - a.finalScore || b.localScore - a.localScore || jobSortKey(b.job) - jobSortKey(a.job));
 
-    const jobMap = new Map(visibleJobs.map((row) => [row.id, row.data]));
+    const bundleJobs = results.map((row) =>
+      buildBundleJobSnapshot({
+        jobId: row.jobId,
+        job: row.job,
+        finalScore: row.finalScore,
+        localScore: row.localScore,
+        aiScore: row.aiScore,
+        reasons: row.reasons,
+      })
+    );
+
+    await updateMeta(metaRef, {
+      stage: "saving",
+      progressPercent: 94,
+      chunksDone: jobChunks.length,
+      totalChunks: jobChunks.length,
+    });
 
     const batch = db.batch();
     for (const row of results) {
-      const job = jobMap.get(row.jobId) ?? {};
       const recRef = userRef.collection("recommendations").doc(row.jobId);
       batch.set(
         recRef,
@@ -167,36 +261,61 @@ Return JSON exactly like {"results":[{"jobId":"...","score":82,"reasons":["...",
           reasons: row.reasons,
           localReasons: row.localReasons,
           aiReasons: row.aiReasons,
-          source: row.aiScore !== undefined ? "groq:manual-v2" : "local:manual-v1",
-          model: "llama-3.1-8b-instant",
+          source: row.aiScore !== undefined ? "groq:manual-v3" : "local:manual-v2",
+          model: MODEL,
           generationId,
           computedAt: completedAt,
-          profileHash: hashish(candidateText),
-          jobHash: hashish(JSON.stringify({
-            title: job?.title ?? "",
-            company: job?.company ?? "",
-            location: job?.location ?? "",
-            jobType: job?.jobType ?? "",
-            tags: job?.tags ?? [],
-            jdText: String(job?.jdText ?? "").slice(0, 1200),
-          })),
+          profileHash,
+          jobHash: hashish(
+            JSON.stringify({
+              title: row.job?.title ?? "",
+              company: row.job?.company ?? "",
+              location: row.job?.location ?? "",
+              jobType: row.job?.jobType ?? "",
+              tags: row.job?.tags ?? [],
+              jdText: String(row.job?.jdText ?? "").slice(0, 1200),
+            })
+          ),
         }),
         { merge: true }
       );
     }
 
     batch.set(
-      metaRef,
+      generationRef,
       stripUndefinedDeep({
-        status: "ready",
         generationId,
+        status: "ready",
         startedAt,
         generatedAt: completedAt,
         updatedAt: completedAt,
-        model: "llama-3.1-8b-instant",
-        recommendationCount: results.length,
+        model: MODEL,
+        recommendationCount: bundleJobs.length,
         aiRecommendationCount: results.filter((x) => x.aiScore !== undefined).length,
-        shortlistedJobIds: shortlist.map((x) => x.id),
+        jobs: bundleJobs,
+        topJobsPreview: bundleJobs.slice(0, 12),
+      }),
+      { merge: true }
+    );
+
+    batch.set(
+      metaRef,
+      stripUndefinedDeep({
+        status: "ready",
+        stage: "ready",
+        progressPercent: 100,
+        generationId,
+        activeGenerationId: generationId,
+        startedAt,
+        generatedAt: completedAt,
+        updatedAt: completedAt,
+        model: MODEL,
+        recommendationCount: bundleJobs.length,
+        aiRecommendationCount: results.filter((x) => x.aiScore !== undefined).length,
+        visibleJobCount: visibleJobs.length,
+        chunksDone: jobChunks.length,
+        totalChunks: jobChunks.length,
+        error: null,
       }),
       { merge: true }
     );
@@ -206,17 +325,16 @@ Return JSON exactly like {"results":[{"jobId":"...","score":82,"reasons":["...",
     return res.status(200).json({
       ok: true,
       generationId,
-      recommendationCount: results.length,
+      recommendationCount: bundleJobs.length,
       aiRecommendationCount: results.filter((row) => row.aiScore !== undefined).length,
-      results: results.map((row) => ({
+      results: bundleJobs.slice(0, 20).map((row) => ({
         jobId: row.jobId,
-        score: row.finalScore,
-        reasons: row.reasons,
+        score: row.matchScore,
+        reasons: row.matchReasons,
       })),
     });
   } catch (e: any) {
     try {
-      const authed = await requireUser(req).catch(() => null);
       if (authed?.uid) {
         const db = getAdminDb();
         await db
@@ -226,7 +344,10 @@ Return JSON exactly like {"results":[{"jobId":"...","score":82,"reasons":["...",
           .doc("main")
           .set(
             stripUndefinedDeep({
-              status: "failed",
+              status: previousActiveGenerationId ? "ready" : "failed",
+              activeGenerationId: previousActiveGenerationId ?? null,
+              stage: previousActiveGenerationId ? "ready" : "failed",
+              progressPercent: previousActiveGenerationId ? 100 : 0,
               error: e?.message ?? "Unknown error",
               updatedAt: new Date(),
             }),

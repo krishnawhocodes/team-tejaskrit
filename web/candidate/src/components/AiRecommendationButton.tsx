@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { Sparkles, RefreshCw, BrainCircuit, CheckCircle2, Loader2 } from "lucide-react";
 
@@ -8,6 +8,8 @@ import { Card } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
 import { generateAiTejaskritRecommendations } from "@/lib/api";
+import { getRecommendationMeta } from "@/lib/firestore";
+import { useAuth } from "@/contexts/AuthProvider";
 import { toast } from "@/hooks/use-toast";
 
 type Props = {
@@ -16,32 +18,55 @@ type Props = {
   compact?: boolean;
 };
 
-const STAGES = [
-  { until: 18, label: "Collecting your visible jobs" },
-  { until: 42, label: "Shortlisting the strongest opportunities" },
-  { until: 76, label: "Tejaskrit AI is reading your master resume" },
-  { until: 94, label: "Saving recommendations to Firebase" },
+const STAGE_LABELS: Record<string, string> = {
+  idle: "Waiting to start",
+  loading_jobs: "Collecting your visible jobs",
+  local_scoring: "Scoring every visible job",
+  ai_scoring: "Tejaskrit AI is ranking your jobs",
+  saving: "Saving the final recommendation bundle",
+  ready: "Recommendations saved",
+  failed: "Recommendation generation failed",
+};
+
+const FALLBACK_STAGES = [
+  { until: 18, label: STAGE_LABELS.loading_jobs },
+  { until: 42, label: STAGE_LABELS.local_scoring },
+  { until: 80, label: STAGE_LABELS.ai_scoring },
+  { until: 95, label: STAGE_LABELS.saving },
   { until: 100, label: "Almost done" },
 ];
 
 export function AiRecommendationButton({ hasRecommendations, generatedAtLabel, compact = false }: Props) {
   const qc = useQueryClient();
+  const { authUser } = useAuth();
   const [open, setOpen] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [progressLabel, setProgressLabel] = useState(FALLBACK_STAGES[0]!.label);
+
+  const metaQuery = useQuery({
+    queryKey: ["recommendationMeta", authUser?.uid],
+    enabled: open && !!authUser?.uid,
+    queryFn: () => getRecommendationMeta(authUser!.uid),
+    refetchInterval: open ? 900 : false,
+    staleTime: 0,
+  });
 
   const mutation = useMutation({
     mutationFn: generateAiTejaskritRecommendations,
     onMutate: () => {
       setProgress(6);
+      setProgressLabel(STAGE_LABELS.loading_jobs);
       setOpen(true);
     },
     onSuccess: (data) => {
       setProgress(100);
+      setProgressLabel(STAGE_LABELS.ready);
       toast({
         title: hasRecommendations ? "Recommendations regenerated" : "Recommendations ready",
-        description: `${data.recommendationCount} AI-ranked jobs are now saved to your profile.`,
+        description: `${data.recommendationCount} ranked jobs are now saved to your profile.`,
       });
       Promise.all([
+        qc.invalidateQueries({ queryKey: ["activeRecommendationBundle"] }),
         qc.invalidateQueries({ queryKey: ["activeRecommendations"] }),
         qc.invalidateQueries({ queryKey: ["recommendationMeta"] }),
         qc.invalidateQueries({ queryKey: ["recommendedJobs"] }),
@@ -58,27 +83,36 @@ export function AiRecommendationButton({ hasRecommendations, generatedAtLabel, c
         description: e?.message ?? "Please try again in a moment.",
         variant: "destructive",
       });
-      setOpen(false);
       setProgress(0);
+      setProgressLabel(STAGE_LABELS.failed);
+      setOpen(false);
     },
   });
 
   useEffect(() => {
-    if (!mutation.isPending) return;
+    const meta = metaQuery.data;
+    if (!open || !meta) return;
+    if (typeof meta.progressPercent === "number") setProgress(Math.max(progress, meta.progressPercent));
+    if (meta.stage) setProgressLabel(STAGE_LABELS[meta.stage] ?? progressLabel);
+  }, [metaQuery.data, open, progress, progressLabel]);
+
+  useEffect(() => {
+    if (!mutation.isPending || metaQuery.data?.stage) return;
     const timer = window.setInterval(() => {
       setProgress((current) => {
-        if (current >= 93) return current;
-        const delta = current < 28 ? 7 : current < 55 ? 5 : current < 80 ? 3 : 1;
-        return Math.min(93, current + delta);
+        if (current >= 90) return current;
+        const delta = current < 28 ? 6 : current < 58 ? 4 : 2;
+        return Math.min(90, current + delta);
       });
     }, 650);
     return () => window.clearInterval(timer);
-  }, [mutation.isPending]);
+  }, [mutation.isPending, metaQuery.data?.stage]);
 
   const currentLabel = useMemo(() => {
-    const match = STAGES.find((stage) => progress <= stage.until);
-    return match?.label ?? STAGES[STAGES.length - 1]!.label;
-  }, [progress]);
+    if (progressLabel) return progressLabel;
+    const match = FALLBACK_STAGES.find((stage) => progress <= stage.until);
+    return match?.label ?? FALLBACK_STAGES[FALLBACK_STAGES.length - 1]!.label;
+  }, [progress, progressLabel]);
 
   return (
     <>
@@ -130,20 +164,24 @@ export function AiRecommendationButton({ hasRecommendations, generatedAtLabel, c
               </div>
               <Progress value={progress} className="h-3" />
               <p className="text-xs text-muted-foreground mt-3">
-                We are shortlisting jobs, scoring them with Tejaskrit AI, and saving the final recommendations to your profile.
+                We are scoring your visible jobs, saving one exact recommendation bundle, and keeping that order stable until you regenerate it.
               </p>
             </div>
 
             <div className="grid grid-cols-3 gap-3 text-center text-xs">
-              {["Jobs", "Resume", "Firebase"].map((item, idx) => (
+              {[
+                { title: "Jobs", subtitle: "Collect" },
+                { title: "AI", subtitle: "Rank" },
+                { title: "Bundle", subtitle: "Save" },
+              ].map((item, idx) => (
                 <motion.div
-                  key={item}
+                  key={item.title}
                   animate={{ y: mutation.isPending ? [0, -5, 0] : 0, opacity: 1 }}
                   transition={{ repeat: mutation.isPending ? Infinity : 0, duration: 1.2, delay: idx * 0.12 }}
                   className="rounded-xl border bg-background p-3"
                 >
-                  <p className="font-semibold">{item}</p>
-                  <p className="text-muted-foreground mt-1">{idx === 0 ? "Collect" : idx === 1 ? "Analyze" : "Save"}</p>
+                  <p className="font-semibold">{item.title}</p>
+                  <p className="text-muted-foreground mt-1">{item.subtitle}</p>
                 </motion.div>
               ))}
             </div>
