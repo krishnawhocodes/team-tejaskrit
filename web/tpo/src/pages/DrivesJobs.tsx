@@ -385,7 +385,6 @@ export default function DrivesJobs() {
         });
       }
 
-
       setWizardOpen(false);
       setImportOpen(false);
       resetWizard();
@@ -481,9 +480,6 @@ export default function DrivesJobs() {
                   Deadline
                 </th>
                 <th className="text-center text-xs font-semibold text-muted-foreground px-5 py-3.5">
-                  Eligible
-                </th>
-                <th className="text-center text-xs font-semibold text-muted-foreground px-5 py-3.5">
                   Applicants
                 </th>
                 <th className="text-left text-xs font-semibold text-muted-foreground px-5 py-3.5">
@@ -498,7 +494,7 @@ export default function DrivesJobs() {
             <tbody>
               {loading && (
                 <tr>
-                  <td colSpan={7} className="px-5 py-10">
+                  <td colSpan={6} className="px-5 py-10">
                     <div className="flex items-center justify-center gap-2 text-muted-foreground">
                       <Loader2 className="h-4 w-4 animate-spin" />
                       <span className="text-sm">Loading drives…</span>
@@ -509,7 +505,7 @@ export default function DrivesJobs() {
 
               {!loading && filtered.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-5 py-10">
+                  <td colSpan={6} className="px-5 py-10">
                     <div className="text-center text-sm text-muted-foreground">
                       No drives found. Create your first institute verified
                       drive.
@@ -527,12 +523,6 @@ export default function DrivesJobs() {
                       : isDeadlineSoon(deadline)
                         ? "Deadline Soon"
                         : "Active";
-
-                  const eligible =
-                    (r.data.sourceMeta?.eligibility?.branches?.length ?? 0) > 0
-                      ? 180 *
-                        (r.data.sourceMeta?.eligibility?.branches?.length ?? 1)
-                      : "—";
 
                   const applicants = appsByJobId.get(r.id) ?? 0;
 
@@ -554,9 +544,6 @@ export default function DrivesJobs() {
                       </td>
                       <td className="px-5 py-4 text-sm text-muted-foreground">
                         {formatDate(deadline)}
-                      </td>
-                      <td className="px-5 py-4 text-sm text-center text-foreground">
-                        {eligible}
                       </td>
                       <td className="px-5 py-4 text-sm text-center text-foreground">
                         {applicants}
