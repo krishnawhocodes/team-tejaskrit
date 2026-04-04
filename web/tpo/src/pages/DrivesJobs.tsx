@@ -914,269 +914,289 @@ export default function DrivesJobs() {
       </Dialog>
 
       <Dialog open={wizardOpen} onOpenChange={setWizardOpen}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
+        <DialogContent className="w-[95vw] max-w-4xl h-[88vh] p-0 overflow-hidden flex flex-col">
+          <DialogHeader className="px-6 pt-6 pb-3 border-b">
             <DialogTitle>Create New Drive</DialogTitle>
           </DialogHeader>
 
-          <div className="flex items-center gap-2 mb-4">
-            {steps.map((s, idx) => (
-              <div key={s} className="flex items-center gap-2">
-                <div
-                  className={`h-7 w-7 rounded-full flex items-center justify-center text-xs font-semibold ${
-                    idx <= currentStep
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-secondary text-muted-foreground"
-                  }`}
-                >
-                  {idx + 1}
+          <div className="px-6 py-4 border-b bg-background">
+            <div className="flex items-center gap-2 flex-wrap">
+              {steps.map((s, idx) => (
+                <div key={s} className="flex items-center gap-2">
+                  <div
+                    className={`h-7 w-7 rounded-full flex items-center justify-center text-xs font-semibold ${
+                      idx <= currentStep
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-secondary text-muted-foreground"
+                    }`}
+                  >
+                    {idx + 1}
+                  </div>
+                  <span
+                    className={`text-xs ${
+                      idx === currentStep
+                        ? "text-foreground"
+                        : "text-muted-foreground"
+                    }`}
+                  >
+                    {s}
+                  </span>
+                  {idx < steps.length - 1 ? (
+                    <div className="w-6 h-px bg-border" />
+                  ) : null}
                 </div>
-                <span
-                  className={`text-xs ${
-                    idx === currentStep
-                      ? "text-foreground"
-                      : "text-muted-foreground"
-                  }`}
-                >
-                  {s}
-                </span>
-                {idx < steps.length - 1 ? (
-                  <div className="w-6 h-px bg-border" />
-                ) : null}
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
 
-          {currentStep === 0 && (
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2 col-span-2">
-                <Label>Role Title</Label>
-                <Input
-                  value={form.title}
-                  onChange={(e) =>
-                    setForm((p) => ({ ...p, title: e.target.value }))
-                  }
-                  placeholder="Frontend Intern"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Company</Label>
-                <Input
-                  value={form.company}
-                  onChange={(e) =>
-                    setForm((p) => ({ ...p, company: e.target.value }))
-                  }
-                  placeholder="ABC"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Location</Label>
-                <Input
-                  value={form.location}
-                  onChange={(e) =>
-                    setForm((p) => ({ ...p, location: e.target.value }))
-                  }
-                  placeholder="Remote"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Job Type</Label>
-                <Select
-                  value={form.jobType}
-                  onValueChange={(v: any) =>
-                    setForm((p) => ({ ...p, jobType: v }))
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Internship">Internship</SelectItem>
-                    <SelectItem value="Full-time">Full-time</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>CTC / Stipend</Label>
-                <Input
-                  value={form.ctcOrStipend}
-                  onChange={(e) =>
-                    setForm((p) => ({ ...p, ctcOrStipend: e.target.value }))
-                  }
-                  placeholder="₹15k/month"
-                />
-              </div>
-              <div className="space-y-2 col-span-2">
-                <Label>Apply Link</Label>
-                <Input
-                  value={form.applyUrl}
-                  onChange={(e) =>
-                    setForm((p) => ({ ...p, applyUrl: e.target.value }))
-                  }
-                  placeholder="https://..."
-                />
-              </div>
-              <div className="space-y-2 col-span-2">
-                <Label>Job Description</Label>
-                <Textarea
-                  value={form.jdText}
-                  onChange={(e) =>
-                    setForm((p) => ({ ...p, jdText: e.target.value }))
-                  }
-                  rows={7}
-                />
-              </div>
-            </div>
-          )}
-
-          {currentStep === 1 && (
-            <div className="space-y-4">
-              <div>
-                <Label>Eligible Branches</Label>
-                <div className="grid grid-cols-2 gap-2 mt-2">
-                  {branches.map((b) => (
-                    <label
-                      key={b}
-                      className="flex items-center gap-2 text-sm cursor-pointer"
-                    >
-                      <Checkbox
-                        checked={form.eligibleBranches.includes(b)}
-                        onCheckedChange={(v) => toggleBranch(b, Boolean(v))}
-                      />
-                      {b}
-                    </label>
-                  ))}
+          <div className="flex-1 overflow-y-auto px-6 py-5">
+            {currentStep === 0 && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2 md:col-span-2">
+                  <Label>Role Title</Label>
+                  <Input
+                    value={form.title}
+                    onChange={(e) =>
+                      setForm((p) => ({ ...p, title: e.target.value }))
+                    }
+                    placeholder="Frontend Intern"
+                  />
                 </div>
-              </div>
 
-              <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Batch (optional)</Label>
+                  <Label>Company</Label>
+                  <Input
+                    value={form.company}
+                    onChange={(e) =>
+                      setForm((p) => ({ ...p, company: e.target.value }))
+                    }
+                    placeholder="ABC"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Location</Label>
+                  <Input
+                    value={form.location}
+                    onChange={(e) =>
+                      setForm((p) => ({ ...p, location: e.target.value }))
+                    }
+                    placeholder="Remote"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Job Type</Label>
                   <Select
-                    value={form.batch}
-                    onValueChange={(v) => setForm((p) => ({ ...p, batch: v }))}
+                    value={form.jobType}
+                    onValueChange={(v: any) =>
+                      setForm((p) => ({ ...p, jobType: v }))
+                    }
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Select" />
                     </SelectTrigger>
                     <SelectContent>
-                      {batches.map((b) => (
-                        <SelectItem key={b} value={b}>
-                          {b}
-                        </SelectItem>
-                      ))}
+                      <SelectItem value="Internship">Internship</SelectItem>
+                      <SelectItem value="Full-time">Full-time</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
+
                 <div className="space-y-2">
-                  <Label>Min CGPA (optional)</Label>
+                  <Label>CTC / Stipend</Label>
                   <Input
-                    value={form.minCgpa}
+                    value={form.ctcOrStipend}
                     onChange={(e) =>
-                      setForm((p) => ({ ...p, minCgpa: e.target.value }))
+                      setForm((p) => ({ ...p, ctcOrStipend: e.target.value }))
                     }
-                    placeholder="7.0"
+                    placeholder="₹15k/month"
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label>Skills (comma-separated)</Label>
+
+                <div className="space-y-2 md:col-span-2">
+                  <Label>Apply Link</Label>
                   <Input
-                    value={form.skillsCsv}
+                    value={form.applyUrl}
                     onChange={(e) =>
-                      setForm((p) => ({ ...p, skillsCsv: e.target.value }))
+                      setForm((p) => ({ ...p, applyUrl: e.target.value }))
                     }
-                    placeholder="React, Node, Firebase"
+                    placeholder="https://..."
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label>Seat limit (optional)</Label>
-                  <Input
-                    value={form.seatLimit}
+
+                <div className="space-y-2 md:col-span-2">
+                  <Label>Job Description</Label>
+                  <Textarea
+                    value={form.jdText}
                     onChange={(e) =>
-                      setForm((p) => ({ ...p, seatLimit: e.target.value }))
+                      setForm((p) => ({ ...p, jdText: e.target.value }))
                     }
-                    placeholder="50"
+                    rows={10}
+                    className="min-h-[260px]"
                   />
                 </div>
               </div>
+            )}
 
-              <div className="bg-secondary/30 rounded-lg p-3">
-                <p className="text-xs text-muted-foreground">
-                  Estimated eligible students (demo):{" "}
-                  <span className="font-semibold text-foreground">
-                    {estimatedEligible}
-                  </span>
-                </p>
-              </div>
-            </div>
-          )}
+            {currentStep === 1 && (
+              <div className="space-y-5">
+                <div>
+                  <Label>Eligible Branches</Label>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+                    {branches.map((b) => (
+                      <label
+                        key={b}
+                        className="flex items-center gap-2 text-sm cursor-pointer"
+                      >
+                        <Checkbox
+                          checked={form.eligibleBranches.includes(b)}
+                          onCheckedChange={(v) => toggleBranch(b, Boolean(v))}
+                        />
+                        {b}
+                      </label>
+                    ))}
+                  </div>
+                </div>
 
-          {currentStep === 2 && (
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2 col-span-2">
-                <Label>Deadline</Label>
-                <Input
-                  type="datetime-local"
-                  value={form.deadlineLocal}
-                  onChange={(e) =>
-                    setForm((p) => ({ ...p, deadlineLocal: e.target.value }))
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>OA Date (optional)</Label>
-                <Input
-                  type="datetime-local"
-                  value={form.oaLocal}
-                  onChange={(e) =>
-                    setForm((p) => ({ ...p, oaLocal: e.target.value }))
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Interview Start (optional)</Label>
-                <Input
-                  type="datetime-local"
-                  value={form.interviewStart}
-                  onChange={(e) =>
-                    setForm((p) => ({ ...p, interviewStart: e.target.value }))
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Interview End (optional)</Label>
-                <Input
-                  type="datetime-local"
-                  value={form.interviewEnd}
-                  onChange={(e) =>
-                    setForm((p) => ({ ...p, interviewEnd: e.target.value }))
-                  }
-                />
-              </div>
-            </div>
-          )}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Batch (optional)</Label>
+                    <Select
+                      value={form.batch}
+                      onValueChange={(v) =>
+                        setForm((p) => ({ ...p, batch: v }))
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {batches.map((b) => (
+                          <SelectItem key={b} value={b}>
+                            {b}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
 
-          {currentStep === 3 && (
-            <div className="space-y-4">
-              <div className="bg-primary/5 border border-primary/10 rounded-lg p-4">
-                <p className="text-sm font-semibold text-foreground mb-1">
-                  Ready to publish
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  This will create an Institute Verified job in /jobs. Students
-                  will see it highlighted in their Candidate dashboard.
-                </p>
-              </div>
+                  <div className="space-y-2">
+                    <Label>Min CGPA (optional)</Label>
+                    <Input
+                      value={form.minCgpa}
+                      onChange={(e) =>
+                        setForm((p) => ({ ...p, minCgpa: e.target.value }))
+                      }
+                      placeholder="7.0"
+                    />
+                  </div>
 
-              <div className="flex flex-wrap gap-2">
-                <Badge>Institute Verified</Badge>
-                <Badge variant="secondary">Visibility: institute</Badge>
-                <Badge variant="outline">Source: tpo</Badge>
-              </div>
-            </div>
-          )}
+                  <div className="space-y-2">
+                    <Label>Skills (comma-separated)</Label>
+                    <Input
+                      value={form.skillsCsv}
+                      onChange={(e) =>
+                        setForm((p) => ({ ...p, skillsCsv: e.target.value }))
+                      }
+                      placeholder="React, Node, Firebase"
+                    />
+                  </div>
 
-          <div className="flex items-center justify-between mt-6">
+                  <div className="space-y-2">
+                    <Label>Seat limit (optional)</Label>
+                    <Input
+                      value={form.seatLimit}
+                      onChange={(e) =>
+                        setForm((p) => ({ ...p, seatLimit: e.target.value }))
+                      }
+                      placeholder="50"
+                    />
+                  </div>
+                </div>
+
+                <div className="bg-secondary/30 rounded-lg p-3">
+                  <p className="text-xs text-muted-foreground">
+                    Estimated eligible students (demo):{" "}
+                    <span className="font-semibold text-foreground">
+                      {estimatedEligible}
+                    </span>
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {currentStep === 2 && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2 md:col-span-2">
+                  <Label>Deadline</Label>
+                  <Input
+                    type="datetime-local"
+                    value={form.deadlineLocal}
+                    onChange={(e) =>
+                      setForm((p) => ({ ...p, deadlineLocal: e.target.value }))
+                    }
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>OA Date (optional)</Label>
+                  <Input
+                    type="datetime-local"
+                    value={form.oaLocal}
+                    onChange={(e) =>
+                      setForm((p) => ({ ...p, oaLocal: e.target.value }))
+                    }
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Interview Start (optional)</Label>
+                  <Input
+                    type="datetime-local"
+                    value={form.interviewStart}
+                    onChange={(e) =>
+                      setForm((p) => ({ ...p, interviewStart: e.target.value }))
+                    }
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Interview End (optional)</Label>
+                  <Input
+                    type="datetime-local"
+                    value={form.interviewEnd}
+                    onChange={(e) =>
+                      setForm((p) => ({ ...p, interviewEnd: e.target.value }))
+                    }
+                  />
+                </div>
+              </div>
+            )}
+
+            {currentStep === 3 && (
+              <div className="space-y-4">
+                <div className="bg-primary/5 border border-primary/10 rounded-lg p-4">
+                  <p className="text-sm font-semibold text-foreground mb-1">
+                    Ready to publish
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    This will create an Institute Verified job in /jobs.
+                    Students will see it highlighted in their Candidate
+                    dashboard.
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  <Badge>Institute Verified</Badge>
+                  <Badge variant="secondary">Visibility: institute</Badge>
+                  <Badge variant="outline">Source: tpo</Badge>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="border-t px-6 py-4 bg-background flex items-center justify-between">
             <Button
               variant="outline"
               size="sm"
@@ -1196,6 +1216,7 @@ export default function DrivesJobs() {
               <Button variant="ghost" size="sm" onClick={resetWizard}>
                 <X className="w-4 h-4 mr-1.5" /> Reset
               </Button>
+
               <Button size="sm" onClick={nextOrPublish} disabled={saving}>
                 {saving ? (
                   <>

@@ -1,5 +1,5 @@
 import { getAuth } from "firebase-admin/auth";
-import { getAdminApp } from "./firebaseadmin";
+import { getAdminApp } from "./firebaseAdmin.js";
 
 function getBearerToken(req: any): string | null {
   const h = req.headers.authorization || req.headers.Authorization;
