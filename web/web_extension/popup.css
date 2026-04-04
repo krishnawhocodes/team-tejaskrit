@@ -1,0 +1,105 @@
+:root{
+  --bg:#0b1020;
+  --card:#121a2c;
+  --muted:#94a3b8;
+  --text:#e5e7eb;
+  --brand:#6366f1;
+  --ok:#10b981;
+  --warn:#f59e0b;
+  --err:#ef4444;
+  --border:rgba(148,163,184,.18);
+}
+*{box-sizing:border-box}
+body{
+  margin:0;
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial;
+  width:360px;
+  background:linear-gradient(180deg,#070a14, var(--bg));
+  color:var(--text);
+}
+header{
+  padding:12px 14px;
+  border-bottom:1px solid var(--border);
+  display:flex;
+  align-items:center;
+  gap:10px;
+}
+header img{width:26px;height:26px;border-radius:8px}
+header .title{font-weight:800; letter-spacing:.06em}
+header .tag{font-size:11px;color:var(--muted)}
+
+.container{padding:12px 14px;}
+.card{
+  background:rgba(18,26,44,.95);
+  border:1px solid var(--border);
+  border-radius:14px;
+  padding:12px;
+  margin-bottom:10px;
+  box-shadow:0 10px 30px rgba(0,0,0,.25);
+}
+.row{display:flex;gap:10px;align-items:center;}
+.space{justify-content:space-between}
+.small{font-size:12px;color:var(--muted)}
+.label{font-size:12px;color:var(--muted); margin-bottom:6px}
+.input{
+  width:100%;
+  background:rgba(255,255,255,.04);
+  border:1px solid var(--border);
+  color:var(--text);
+  border-radius:10px;
+  padding:10px 10px;
+  outline:none;
+}
+.input:focus{border-color:rgba(99,102,241,.55)}
+.btn{
+  width:100%;
+  border:none;
+  border-radius:12px;
+  padding:10px 12px;
+  font-weight:700;
+  cursor:pointer;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+}
+.btn.primary{background:var(--brand); color:white}
+.btn.secondary{background:rgba(255,255,255,.06); color:var(--text); border:1px solid var(--border)}
+.btn.ok{background:rgba(16,185,129,.12); color:#b7f7df; border:1px solid rgba(16,185,129,.35)}
+.btn.warn{background:rgba(245,158,11,.12); color:#ffe4b5; border:1px solid rgba(245,158,11,.35)}
+.btn.danger{background:rgba(239,68,68,.12); color:#ffc9c9; border:1px solid rgba(239,68,68,.35)}
+.btn:disabled{opacity:.55; cursor:not-allowed}
+
+.badge{
+  font-size:11px;
+  padding:4px 8px;
+  border-radius:999px;
+  border:1px solid var(--border);
+  background:rgba(255,255,255,.04);
+}
+.badge.ok{border-color:rgba(16,185,129,.35); background:rgba(16,185,129,.12); color:#b7f7df}
+.badge.err{border-color:rgba(239,68,68,.35); background:rgba(239,68,68,.12); color:#ffc9c9}
+
+.hr{height:1px;background:var(--border); margin:10px 0}
+
+.toast{font-size:12px; padding:8px 10px; border-radius:12px; border:1px solid var(--border); background:rgba(255,255,255,.04)}
+.toast.ok{border-color:rgba(16,185,129,.35); background:rgba(16,185,129,.10)}
+.toast.err{border-color:rgba(239,68,68,.35); background:rgba(239,68,68,.10)}
+
+.details{font-size:12px; color:var(--text)}
+.details .muted{color:var(--muted)}
+.details .k{color:var(--muted)}
+.details .v{color:var(--text)}
+
+.grid2{display:grid; grid-template-columns:1fr 1fr; gap:10px}
+
+.toggle{display:flex; gap:10px; align-items:center; justify-content:space-between}
+.toggle input{transform: scale(1.1)}
+
+.footer{display:flex; gap:10px}
+.footer .btn{width:50%}
+
+.link{color:#c7d2fe; text-decoration:none}
+.link:hover{text-decoration:underline}
+
+.code{font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono"; font-size:11px; color:var(--muted)}
