@@ -9,7 +9,7 @@ import {
   X,
   Loader2,
 } from "lucide-react";
-
+import { sendDriveEmails } from "@/lib/email-notifications";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -365,10 +365,26 @@ export default function DrivesJobs() {
         console.warn("Drive notification failed", e);
       }
 
-      toast({
-        title: "Drive published",
-        description: "Created in /jobs and notified eligible candidates.",
-      });
+      try {
+        const emailResult = await sendDriveEmails(jobId);
+
+        toast({
+          title: "Drive published",
+          description:
+            emailResult.sentCount > 0
+              ? `Created in /jobs, notified eligible candidates, and sent ${emailResult.sentCount} email notifications.`
+              : "Created in /jobs and notified eligible candidates. No email recipients were found.",
+        });
+      } catch (e: any) {
+        console.warn("Drive email failed", e);
+
+        toast({
+          title: "Drive published",
+          description:
+            "Created in /jobs and notified eligible candidates in-app, but email sending failed.",
+        });
+      }
+
 
       setWizardOpen(false);
       setImportOpen(false);
