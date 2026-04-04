@@ -311,11 +311,11 @@ export default function LatexEditor() {
 
                 <Separator />
 
-                {/* <div className="p-4 bg-muted/20 space-y-3">
+                <div className="p-4 bg-muted/20 space-y-3">
                   <div className="flex items-center gap-2">
                     <Bot className="h-4 w-4" />
                     <span className="font-semibold text-sm">AI Assist</span>
-                    <Badge variant="secondary">Tejas</Badge>
+                    <Badge variant="secondary">Tejas Assist</Badge>
                   </div>
                   <p className="text-xs text-muted-foreground">
                     Ask AI to rewrite bullets, emphasize a stack, shorten sections, improve ATS relevance, or retarget the resume to this role.
@@ -336,7 +336,7 @@ export default function LatexEditor() {
                       </Button>
                     </div>
                   </div>
-                </div> */}
+                </div>
               </Card>
 
               <Card className="card-elevated p-0 overflow-hidden min-h-[72vh] flex flex-col">
