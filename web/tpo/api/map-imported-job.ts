@@ -1,5 +1,5 @@
-import { requireUser } from "./_lib/auth";
-import { groqJson } from "./_lib/groq";
+import { requireUser } from "./_lib/auth.js";
+import { groqJson } from "./_lib/groq.js";
 
 const BRANCHES = ["CSE", "IT", "ECE", "EE", "ME", "CE"];
 const BATCHES = ["2024", "2025", "2026", "2027"];
