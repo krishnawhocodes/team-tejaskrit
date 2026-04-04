@@ -11,6 +11,7 @@ import Onboarding from "@/pages/Onboarding";
 import Jobs from "@/pages/Jobs";
 import Tracker from "@/pages/Tracker";
 import Resume from "@/pages/Resume";
+import LatexEditor from "@/pages/LatexEditor";
 import Extension from "@/pages/Extension";
 import Notifications from "@/pages/Notifications";
 import NotFound from "@/pages/NotFound";
@@ -68,6 +69,14 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <Resume />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/resume/editor/:applicationId"
+              element={
+                <ProtectedRoute>
+                  <LatexEditor />
                 </ProtectedRoute>
               }
             />

@@ -382,10 +382,6 @@ export default function Resume() {
     }
   };
 
-  // View LaTeX dialog
-  const [latexOpen, setLatexOpen] = useState(false);
-  const [latexText, setLatexText] = useState<string>("");
-
   return (
     <AppLayout>
       <div className="page-container">
@@ -852,8 +848,7 @@ export default function Resume() {
                                 toast({ title: "Not ready", description: "LaTeX not available yet." });
                                 return;
                               }
-                              setLatexText(r.latex);
-                              setLatexOpen(true);
+                              navigate(`/resume/editor/${encodeURIComponent(r.applicationId)}`);
                             }}
                           >
                             <Code className="h-3.5 w-3.5" />
@@ -1087,28 +1082,6 @@ export default function Resume() {
           </DialogContent>
         </Dialog>
 
-        {/* View LaTeX */}
-        <Dialog open={latexOpen} onOpenChange={setLatexOpen}>
-          <DialogContent className="max-w-3xl">
-            <DialogHeader>
-              <DialogTitle>Tailored Resume LaTeX</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-3">
-              <p className="text-xs text-muted-foreground">
-                This LaTeX is saved in Firestore. Download as PDF anytime using the Download button.
-              </p>
-              <pre className="text-xs bg-muted rounded-lg p-4 overflow-auto max-h-[60vh] whitespace-pre-wrap">
-                {latexText}
-              </pre>
-              <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => navigator.clipboard.writeText(latexText).catch(() => void 0)}>
-                  Copy
-                </Button>
-                <Button onClick={() => setLatexOpen(false)}>Close</Button>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
       </div>
     </AppLayout>
   );
@@ -1215,5 +1188,3 @@ function removeStringItem<T extends Record<string, any>>(
     return { ...(p as any), [key]: arr };
   });
 }
-
-
