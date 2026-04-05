@@ -1,6 +1,13 @@
 import { useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { Briefcase, FileText, LayoutDashboard, Search, Bell } from "lucide-react";
+import {
+  Briefcase,
+  FileText,
+  LayoutDashboard,
+  Search,
+  Bell,
+  BarChart3
+} from "lucide-react";
 import {
   CommandDialog,
   CommandEmpty,
@@ -84,6 +91,9 @@ export function CommandPalette({ open, onOpenChange }: Props) {
           <CommandItem onSelect={() => go("/tracker")}>
             <Search className="mr-2 h-4 w-4" /> Tracker
           </CommandItem>
+          <CommandItem onSelect={() => go("/analytics")}>
+            <BarChart3 className="mr-2 h-4 w-4" /> Analytics
+          </CommandItem>
           <CommandItem onSelect={() => go("/resume")}>
             <FileText className="mr-2 h-4 w-4" /> Resume
           </CommandItem>
@@ -94,10 +104,14 @@ export function CommandPalette({ open, onOpenChange }: Props) {
 
         <CommandGroup heading="Top Jobs">
           {items.map((job) => (
-            <CommandItem key={job.id} onSelect={() => go("/jobs")}> 
+            <CommandItem key={job.id} onSelect={() => go("/jobs")}>
               <Briefcase className="mr-2 h-4 w-4" />
               {job.title} — {job.company}
-              {job.score ? <span className="ml-auto text-xs text-muted-foreground">{job.score}%</span> : null}
+              {job.score ? (
+                <span className="ml-auto text-xs text-muted-foreground">
+                  {job.score}%
+                </span>
+              ) : null}
             </CommandItem>
           ))}
         </CommandGroup>

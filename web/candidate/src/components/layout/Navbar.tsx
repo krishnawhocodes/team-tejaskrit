@@ -12,6 +12,7 @@ const navItems = [
   { label: "Dashboard", path: "/" },
   { label: "Jobs", path: "/jobs" },
   { label: "Tracker", path: "/tracker" },
+  { label: "Analytics", path: "/analytics" },
   { label: "Resume", path: "/resume" },
   { label: "Extension", path: "/extension" },
   { label: "Notifications", path: "/notifications" },

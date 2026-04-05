@@ -186,36 +186,59 @@ export default function Dashboard() {
     <AppLayout>
       <div className="page-container space-y-8">
         {/* Header */}
-        <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+        <motion.div
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+        >
           <h1 className="text-2xl font-bold">
-            {greeting}, {(userDoc?.name || authUser?.displayName || "").split(" ")[0] || ""}
+            {greeting},{" "}
+            {(userDoc?.name || authUser?.displayName || "").split(" ")[0] || ""}
           </h1>
-          <p className="text-muted-foreground text-sm mt-1">Your placement journey at a glance</p>
+          <p className="text-muted-foreground text-sm mt-1">
+            Your placement journey at a glance
+          </p>
         </motion.div>
 
         <AiRecommendationButton
           hasRecommendations={hasSavedBundle}
-          generatedAtLabel={activeRecommendationBundle?.meta?.generatedAt ? timeAgo((activeRecommendationBundle.meta.generatedAt as any)?.toMillis?.()) : undefined}
+          generatedAtLabel={
+            activeRecommendationBundle?.meta?.generatedAt
+              ? timeAgo(
+                  (
+                    activeRecommendationBundle.meta.generatedAt as any
+                  )?.toMillis?.(),
+                )
+              : undefined
+          }
         />
 
         {/* KPI Cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {kpis.map((kpi, i) => (
-            <motion.div key={kpi.label} custom={i} initial="hidden" animate="visible" variants={fadeUp}>
-              <Card className="card-elevated p-5 flex items-start gap-4">
-                <div className={`h-10 w-10 rounded-lg bg-muted flex items-center justify-center shrink-0 ${kpi.color}`}>
-                  <kpi.icon className="h-5 w-5" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold">{kpi.value}</p>
-                  <p className="text-xs text-muted-foreground">{kpi.label}</p>
-                </div>
-              </Card>
+            <motion.div
+              key={kpi.label}
+              custom={i}
+              initial="hidden"
+              animate="visible"
+              variants={fadeUp}
+            >
+              <Link to={kpi.href}>
+                <Card className="card-elevated p-5 flex items-start gap-4 cursor-pointer hover:border-primary/40 hover:shadow-md transition-all">
+                  <div
+                    className={`h-10 w-10 rounded-lg bg-muted flex items-center justify-center shrink-0 ${kpi.color}`}
+                  >
+                    <kpi.icon className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold">{kpi.value}</p>
+                    <p className="text-xs text-muted-foreground">{kpi.label}</p>
+                  </div>
+                </Card>
+              </Link>
             </motion.div>
           ))}
         </div>
-
-  
 
         {/* Priority Opportunities */}
         <section>
@@ -229,19 +252,30 @@ export default function Dashboard() {
           </div>
 
           {recommendationLoading || (!hasSavedBundle && fallbackLoading) ? (
-            <Card className="card-elevated p-6 text-sm text-muted-foreground">Loading priority jobs…</Card>
+            <Card className="card-elevated p-6 text-sm text-muted-foreground">
+              Loading priority jobs…
+            </Card>
           ) : priorityJobs.length === 0 ? (
             <Card className="card-elevated p-6 text-sm text-muted-foreground">
-              Generate AI Tejaskrit recommendations to save your top matched jobs here.
+              Generate AI Tejaskrit recommendations to save your top matched
+              jobs here.
             </Card>
           ) : (
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
               {priorityJobs.map((job, i) => (
-                <motion.div key={job.id} custom={i} initial="hidden" animate="visible" variants={fadeUp}>
+                <motion.div
+                  key={job.id}
+                  custom={i}
+                  initial="hidden"
+                  animate="visible"
+                  variants={fadeUp}
+                >
                   <Card className="card-elevated p-5 flex flex-col gap-3 h-full">
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
-                        <h3 className="font-semibold text-sm truncate">{job.title}</h3>
+                        <h3 className="font-semibold text-sm truncate">
+                          {job.title}
+                        </h3>
                         <p className="text-xs text-muted-foreground">
                           {job.company} · {job.location ?? "—"}
                         </p>
@@ -251,7 +285,10 @@ export default function Dashboard() {
                     <div className="flex flex-wrap gap-1.5">
                       <SourceBadge source={job.source} />
                       {job.matchReasons.slice(0, 2).map((r) => (
-                        <span key={r} className="text-[11px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+                        <span
+                          key={r}
+                          className="text-[11px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground"
+                        >
                           {r}
                         </span>
                       ))}
@@ -261,7 +298,11 @@ export default function Dashboard() {
                     </p>
                     <div className="flex gap-2 mt-auto pt-2">
                       <Link to="/jobs" className="flex-1">
-                        <Button size="sm" variant="outline" className="text-xs w-full">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-xs w-full"
+                        >
                           View
                         </Button>
                       </Link>
@@ -276,7 +317,9 @@ export default function Dashboard() {
                       <Button
                         size="sm"
                         className="text-xs flex-1 gap-1"
-                        onClick={() => job.applyUrl && window.open(job.applyUrl, "_blank")}
+                        onClick={() =>
+                          job.applyUrl && window.open(job.applyUrl, "_blank")
+                        }
                       >
                         <ExternalLink className="h-3 w-3" /> Apply
                       </Button>
@@ -291,10 +334,15 @@ export default function Dashboard() {
         {/* Institute Verified */}
         {(instituteJobs?.length ?? 0) > 0 && (
           <section>
-            <h2 className="text-lg font-semibold mb-4">Institute Verified Drives</h2>
+            <h2 className="text-lg font-semibold mb-4">
+              Institute Verified Drives
+            </h2>
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
               {instituteJobs!.map((job) => (
-                <Card key={job.id} className="card-elevated p-5 border-l-4 border-l-primary space-y-2">
+                <Card
+                  key={job.id}
+                  className="card-elevated p-5 border-l-4 border-l-primary space-y-2"
+                >
                   <div className="flex items-start justify-between">
                     <div>
                       <h3 className="font-semibold text-sm">{job.title}</h3>
@@ -305,7 +353,13 @@ export default function Dashboard() {
                     <MatchScore score={job.matchScore} />
                   </div>
                   <SourceBadge source="Institute Verified" />
-                  <Button size="sm" className="text-xs w-full mt-2" onClick={() => job.applyUrl && window.open(job.applyUrl, "_blank")}>
+                  <Button
+                    size="sm"
+                    className="text-xs w-full mt-2"
+                    onClick={() =>
+                      job.applyUrl && window.open(job.applyUrl, "_blank")
+                    }
+                  >
                     View & Apply
                   </Button>
                 </Card>
@@ -321,25 +375,37 @@ export default function Dashboard() {
             <h2 className="text-lg font-semibold mb-4">Upcoming Events</h2>
             <Card className="card-elevated divide-y divide-border">
               {(upcoming ?? []).length === 0 ? (
-                <div className="p-4 text-sm text-muted-foreground">No upcoming OA/Interview events yet.</div>
+                <div className="p-4 text-sm text-muted-foreground">
+                  No upcoming OA/Interview events yet.
+                </div>
               ) : (
                 (upcoming ?? []).map((x) => (
-                  <div key={x.applicationId} className="p-4 flex items-center justify-between gap-4">
+                  <div
+                    key={x.applicationId}
+                    className="p-4 flex items-center justify-between gap-4"
+                  >
                     <div className="flex items-center gap-3 min-w-0">
                       <div className="h-9 w-9 rounded-lg bg-accent flex items-center justify-center shrink-0">
                         <CalendarDays className="h-4 w-4 text-accent-foreground" />
                       </div>
                       <div className="min-w-0">
                         <p className="text-sm font-medium truncate">
-                          {x.event.title || x.event.type?.toUpperCase()} — {x.jobId}
+                          {x.event.title || x.event.type?.toUpperCase()} —{" "}
+                          {x.jobId}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          {new Date(x.event.scheduledAt.toMillis()).toLocaleString()}
+                          {new Date(
+                            x.event.scheduledAt.toMillis(),
+                          ).toLocaleString()}
                         </p>
                       </div>
                     </div>
                     <Link to="/tracker">
-                      <Button variant="ghost" size="sm" className="text-xs shrink-0">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-xs shrink-0"
+                      >
                         Open
                       </Button>
                     </Link>
@@ -354,16 +420,22 @@ export default function Dashboard() {
             <h2 className="text-lg font-semibold mb-4">Recent Activity</h2>
             <Card className="card-elevated divide-y divide-border">
               {recentActivity.length === 0 ? (
-                <div className="p-4 text-sm text-muted-foreground">No activity yet.</div>
+                <div className="p-4 text-sm text-muted-foreground">
+                  No activity yet.
+                </div>
               ) : (
                 recentActivity.map((item) => (
                   <div key={item.id} className="p-4 flex items-center gap-3">
                     <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center shrink-0 text-muted-foreground">
-                      {activityIcons[item.icon] || <CheckCircle2 className="h-4 w-4" />}
+                      {activityIcons[item.icon] || (
+                        <CheckCircle2 className="h-4 w-4" />
+                      )}
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="text-sm truncate">{item.text}</p>
-                      <p className="text-xs text-muted-foreground">{item.time}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {item.time}
+                      </p>
                     </div>
                   </div>
                 ))
@@ -393,13 +465,90 @@ function toJobUI(id: string, j: JobDoc, score: number, reasons: string[], instit
   };
 }
 
-function computeKPIs(jobs: JobUI[], apps: Array<{ id: string; data: any }>, upcoming: any[]) {
+function computeKPIs(
+  jobs: JobUI[],
+  apps: Array<{ id: string; data: any }>,
+  upcoming: any[],
+) {
   const offers = apps.filter((a) => a.data.status === "offer").length;
-  const active = apps.filter((a) => ["applied", "oa_scheduled", "interview_scheduled"].includes(a.data.status)).length;
+  const active = apps.filter((a) =>
+    ["applied", "oa_scheduled", "interview_scheduled"].includes(a.data.status),
+  ).length;
+
   return [
-    { label: "New Matches", value: String(Math.min(jobs.length, 9)), icon: Sparkles, color: "text-primary" },
-    { label: "Active Applications", value: String(active), icon: Briefcase, color: "text-info" },
-    { label: "Upcoming Events", value: String(upcoming.length), icon: CalendarDays, color: "text-warning" },
-    { label: "Offers", value: String(offers), icon: Trophy, color: "text-success" },
+    {
+      label: "New Matches",
+      value: String(Math.min(jobs.length, 9)),
+      icon: Sparkles,
+      color: "text-primary",
+      href: "/jobs",
+    },
+    {
+      label: "Active Applications",
+      value: String(active),
+      icon: Briefcase,
+      color: "text-info",
+      href: "/tracker",
+    },
+    {
+      label: "Upcoming Events",
+      value: String(upcoming.length),
+      icon: CalendarDays,
+      color: "text-warning",
+      href: "/tracker",
+    },
+    {
+      label: "Offers",
+      value: String(offers),
+      icon: Trophy,
+      color: "text-success",
+      href: "/tracker",
+    },
   ];
+}
+function computeApplicationInsights(apps: Array<{ id: string; data: any }>) {
+  const total = apps.length;
+
+  const active = apps.filter((a) =>
+    ["applied", "oa_scheduled", "interview_scheduled"].includes(a.data.status)
+  ).length;
+
+  const interviews = apps.filter((a) => a.data.status === "interview_scheduled").length;
+  const offers = apps.filter((a) => a.data.status === "offer").length;
+  const joined = apps.filter((a) => a.data.status === "joined").length;
+  const rejected = apps.filter((a) =>
+    ["rejected", "withdrawn"].includes(a.data.status)
+  ).length;
+
+  const submitted = apps.filter((a) =>
+    !["saved", "tailored"].includes(a.data.status)
+  ).length;
+
+  const responded = apps.filter((a) =>
+    ["oa_scheduled", "interview_scheduled", "offer", "joined", "rejected"].includes(a.data.status)
+  ).length;
+
+  const responseRate = submitted > 0 ? Math.round((responded / submitted) * 100) : 0;
+  const offerRate = submitted > 0 ? Math.round(((offers + joined) / submitted) * 100) : 0;
+
+  const statusBreakdown = [
+    { label: "Active", value: active, color: "bg-blue-500" },
+    { label: "Interviews", value: interviews, color: "bg-amber-500" },
+    { label: "Offers", value: offers + joined, color: "bg-emerald-500" },
+    { label: "Closed", value: rejected, color: "bg-slate-400" },
+  ];
+
+  return {
+    total,
+    active,
+    interviews,
+    offers,
+    joined,
+    rejected,
+    submitted,
+    responded,
+    responseRate,
+    offerRate,
+    statusBreakdown,
+  };
 }
